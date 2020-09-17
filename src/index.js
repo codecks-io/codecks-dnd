@@ -13,10 +13,10 @@ const Portal = ({children}) => {
 
 const useDragStore = create((set) => ({
   item: null, // {type, id, data}
-  dragInfo: null, // {startPos, currentPos, node, bounds}
+  dragInfo: null, // {startPos, currentPos, mouseOffset}
   set: ({item, dragInfo}) => set({item, dragInfo}),
   setItem: (item) => set({item}),
-  setDragInfo: (dragInfo) => set((prev) => dragInfo(prev)),
+  setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
 }));
 
 export const primaryButton = 0;
@@ -24,6 +24,8 @@ export const sloppyClickThreshold = 5;
 const isSloppyClickThresholdExceeded = (original, current) =>
   Math.abs(current.x - original.x) >= sloppyClickThreshold ||
   Math.abs(current.y - original.y) >= sloppyClickThreshold;
+
+const add = (p1, p2) => ({x: p1.x + p2.x, y: p1.y + p2.y});
 
 const DragControllerCtx = React.createContext(() =>
   // eslint-disable-next-line no-console
@@ -38,7 +40,14 @@ const DragElement = ({rect, children}) => {
   React.useEffect(() => {
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
-      setDragInfo((prev) => ({dragInfo: {startPos: prev.dragInfo.startPos, currentPos: point}}));
+      setDragInfo((prev) => ({
+        dragInfo: {
+          startPos: prev.startPos,
+          mouseOffset: prev.mouseOffset,
+          currentPos: add(point, prev.mouseOffset),
+          dimensions: prev.dimensions,
+        },
+      }));
     };
     const onMouseUp = () => {
       set({item: null, setDragInfo: null});
@@ -89,21 +98,37 @@ const DragElement = ({rect, children}) => {
 };
 
 export const DragController = ({type, renderItem, children}) => {
+  // React.useEffect(
+  //   () =>
+  //     useDragStore.subscribe((state) => {
+  //       console.log(JSON.stringify(state));
+  //     }),
+  //   []
+  // );
+
   const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) => s.item);
   const [dragItemRect, setDragItemRect] = React.useState(null);
 
   React.useEffect(() => {
     if (dragItemRect && !dragItem) {
-      console.log("no more item can remove portal");
       setDragItemRect(null);
     }
   }, [dragItem, dragItemRect]);
 
   const onHandleItemDragStart = React.useCallback(
-    ({item, nodeRect, dragInfo}) => {
+    ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
       if (type !== item.type) return;
       setDragItemRect(nodeRect);
+      const centerX = nodeRect.left + nodeRect.width / 2;
+      const centerY = nodeRect.top + nodeRect.height / 2;
+      const mouseOffset = {x: centerX - currentPos.x, y: centerY - currentPos.y};
+      const dragInfo = {
+        mouseOffset,
+        startPos: add(startPos, mouseOffset),
+        currentPos: add(currentPos, mouseOffset),
+        dimensions: {width: nodeRect.width, height: nodeRect.height},
+      };
       set({item, dragInfo});
     },
     [set, type]
@@ -120,13 +145,18 @@ export const DragController = ({type, renderItem, children}) => {
   );
 };
 
+const Placeholder = ({children}) => {
+  const dimensions = useDragStore((s) => s.dragInfo && s.dragInfo.dimensions);
+  return <div style={dimensions}>{children}</div>;
+};
+
 const idleState = {state: "idle", data: null};
 
-export const Draggable = ({type, id, itemData, children}) => {
+export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => {
   const onItemDragStart = React.useContext(DragControllerCtx);
   const dragItem = useDragStore((s) => s.item);
   const [dragState, setDragState] = React.useState(idleState);
-  const [node, setNode] = React.useState(null);
+  const nodeRef = React.useRef();
   const isDraggingMe = dragItem && dragItem.type === type && dragItem && dragItem.id === id;
 
   // console.log(dragState);
@@ -137,8 +167,8 @@ export const Draggable = ({type, id, itemData, children}) => {
   }, [itemData]);
 
   React.useLayoutEffect(() => {
-    if (node && dragState.state === "started") {
-      const rect = node.getBoundingClientRect();
+    if (nodeRef.current && dragState.state === "started") {
+      const rect = nodeRef.current.getBoundingClientRect();
       const {top, bottom, left, right, height, width} = rect;
       const nodeRect = {top, bottom, left, right, height, width};
       onItemDragStart({
@@ -148,7 +178,7 @@ export const Draggable = ({type, id, itemData, children}) => {
       });
       setDragState(idleState);
     }
-  }, [dragState, id, node, onItemDragStart, type]);
+  }, [dragState, id, onItemDragStart, type]);
 
   const handlers = React.useMemo(() => {
     if (dragState.state === "idle") {
@@ -183,8 +213,8 @@ export const Draggable = ({type, id, itemData, children}) => {
     }
   }, [dragState]);
   if (isDraggingMe) {
-    return <div>PLACEHOLDER</div>;
+    return <Placeholder>{renderPlaceholder ? renderPlaceholder() : null}</Placeholder>;
   } else {
-    return children({handlers, ref: setNode});
+    return children({handlers, ref: nodeRef});
   }
 };
