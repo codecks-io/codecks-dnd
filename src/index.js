@@ -14,6 +14,11 @@ const Portal = ({children}) => {
 const useDragStore = create((set) => ({
   item: null, // {type, id, data}
   dragInfo: null, // {startPos, currentPos, mouseOffset}
+  dropFns: [],
+  addDropFn: (fn) => {
+    set((prev) => ({dropFns: [fn, ...prev.dropFns]}));
+    return () => set((prev) => ({dropFns: prev.dropFns.filter((f) => f !== fn)}));
+  },
   set: ({item, dragInfo}) => set({item, dragInfo}),
   setItem: (item) => set({item}),
   setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
@@ -50,6 +55,8 @@ const DragElement = ({rect, children}) => {
       }));
     };
     const onMouseUp = () => {
+      const {dropFns, item} = useDragStore.getState();
+      dropFns.some((fn) => fn({item}) !== false);
       set({item: null, setDragInfo: null});
     };
     document.addEventListener("mousemove", onMouseMove);
@@ -107,7 +114,7 @@ export const DragController = ({type, renderItem, children}) => {
   // );
 
   const set = useDragStore((s) => s.set);
-  const dragItem = useDragStore((s) => s.item);
+  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
   const [dragItemRect, setDragItemRect] = React.useState(null);
 
   React.useEffect(() => {
@@ -118,7 +125,6 @@ export const DragController = ({type, renderItem, children}) => {
 
   const onHandleItemDragStart = React.useCallback(
     ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
-      if (type !== item.type) return;
       setDragItemRect(nodeRect);
       const centerX = nodeRect.left + nodeRect.width / 2;
       const centerY = nodeRect.top + nodeRect.height / 2;
@@ -131,7 +137,7 @@ export const DragController = ({type, renderItem, children}) => {
       };
       set({item, dragInfo});
     },
-    [set, type]
+    [set]
   );
   return (
     <>
@@ -154,12 +160,12 @@ const idleState = {state: "idle", data: null};
 
 export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => {
   const onItemDragStart = React.useContext(DragControllerCtx);
-  const dragItem = useDragStore((s) => s.item);
+  const isDraggingMe = useDragStore((s) =>
+    s.item && s.item.type === type && s.item.id === id ? true : false
+  );
+
   const [dragState, setDragState] = React.useState(idleState);
   const nodeRef = React.useRef();
-  const isDraggingMe = dragItem && dragItem.type === type && dragItem && dragItem.id === id;
-
-  // console.log(dragState);
 
   const itemDataRef = React.useRef(itemData);
   React.useEffect(() => {
@@ -217,4 +223,115 @@ export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => 
   } else {
     return children({handlers, ref: nodeRef});
   }
+};
+
+const isWithin = (point, rect) =>
+  point.x >= rect.left &&
+  point.x <= rect.left + rect.width &&
+  point.y >= rect.top &&
+  point.y <= rect.top + rect.height;
+
+let passiveArg = null;
+const getPassiveArg = () => {
+  if (passiveArg === null) {
+    passiveArg = false;
+    try {
+      var opts = Object.defineProperty({}, "passive", {
+        // eslint-disable-next-line getter-return
+        get() {
+          passiveArg = {passive: true};
+        },
+      });
+      window.addEventListener("testPassive", null, opts);
+      window.removeEventListener("testPassive", null, opts);
+    } catch (e) {}
+  }
+  return passiveArg;
+};
+
+const getRectListener = (node, setRect) => {
+  const unsubs = [];
+  const update = () => {
+    const rect = node.getBoundingClientRect();
+    const {top, bottom, left, right, width, height} = rect;
+    setRect({top, bottom, left, right, width, height});
+  };
+  const ro = new ResizeObserver(update);
+  ro.observe(node);
+  unsubs.push(() => ro.disconnect());
+
+  let offsetParent = node;
+  while ((offsetParent = offsetParent.offsetParent)) {
+    const overflowYVal = window.getComputedStyle(offsetParent, null).getPropertyValue("overflow-y");
+    if (overflowYVal === "auto" || overflowYVal === "scroll" || offsetParent === document.body) {
+      const parent = offsetParent;
+      parent.addEventListener("scroll", update, getPassiveArg());
+      unsubs.push(() => parent.removeEventListener("scroll", update, getPassiveArg()));
+    }
+  }
+
+  window.addEventListener("resize", update);
+  unsubs.push(() => window.removeEventListener("resive", update));
+
+  update();
+
+  return () => {
+    unsubs.forEach((fn) => fn());
+    setRect(null);
+  };
+};
+
+export const useDropZone = ({type, onDragOver, onDrop}) => {
+  const nodeRef = React.useRef();
+  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
+  const addDropFn = useDragStore((s) => s.addDropFn);
+  const [rect, setRect] = React.useState(null);
+  const rectRef = React.useRef(null);
+  const isOver = useDragStore((s) =>
+    rect && s.dragInfo && isWithin(s.dragInfo.currentPos, rect) ? true : false
+  );
+
+  const onDropRef = React.useRef(onDrop);
+  React.useEffect(() => {
+    onDropRef.current = onDrop;
+  }, [onDrop]);
+
+  const onDragRef = React.useRef(onDragOver);
+  React.useEffect(() => {
+    onDragRef.current = onDragOver;
+  }, [onDragOver]);
+  const hasOnDragCb = !!onDragOver;
+
+  React.useEffect(() => {
+    if (hasOnDragCb && dragItem) {
+      return useDragStore.subscribe(
+        (currentPos) => {
+          if (currentPos && rectRef.current && onDragRef.current) {
+            if (isWithin(currentPos, rectRef.current)) {
+              const position = {
+                x: currentPos.x - rectRef.current.x,
+                y: currentPos.y - rectRef.current.y,
+              };
+              onDragRef.current({item: dragItem, position});
+            }
+          }
+        },
+        (state) => state.dragInfo && state.dragInfo.currentPos
+      );
+    }
+  }, [dragItem, hasOnDragCb]);
+
+  React.useEffect(() => {
+    if (isOver) {
+      return addDropFn((...args) => onDropRef.current && onDropRef.current(...args));
+    }
+  }, [isOver, addDropFn]);
+
+  React.useLayoutEffect(() => {
+    if (dragItem && nodeRef.current) {
+      return getRectListener(nodeRef.current, setRect);
+    }
+  }, [dragItem]);
+
+  return {ref: nodeRef, dragItem, isOver};
 };

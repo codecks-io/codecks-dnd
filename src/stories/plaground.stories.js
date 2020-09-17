@@ -1,13 +1,19 @@
 import React from "react";
-import {DragController, Draggable} from "..";
+import {DragController, Draggable, useDropZone} from "..";
 
-const Box = React.forwardRef(({id, ...rest}, ref) => (
-  <div style={{width: 40, height: 40, background: "yellow"}} {...rest} ref={ref}>
+const Box = React.forwardRef(({id, style, ...rest}, ref) => (
+  <div style={{width: 40, height: 40, background: "yellow", ...style}} {...rest} ref={ref}>
     {id}
   </div>
 ));
 
 const boxes = [1, 3, 6];
+
+const DropArea = () => {
+  const {isOver, ref} = useDropZone({type: "box", onDrop: (data) => console.log({drop: data})});
+
+  return <div style={{width: 200, height: 100, background: isOver ? "blue" : "red"}} ref={ref} />;
+};
 
 export const Playground = () => (
   <div>
@@ -20,6 +26,9 @@ export const Playground = () => (
         ))}
       </div>
     </DragController>
+    <DropArea />
+    <div style={{height: 10}} />
+    <DropArea />
   </div>
 );
 
