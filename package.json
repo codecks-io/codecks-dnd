@@ -1,0 +1,49 @@
+{
+  "name": "@cdx/dnd",
+  "version": "0.1.0",
+  "description": "Drag and Drop",
+  "keywords": [
+    "react",
+    "drag and drop"
+  ],
+  "main": "dist/cjs/index.js",
+  "module": "dist/es/index.js",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "repository": "https://github.com/codecks_io/cdx-dnd",
+  "author": "Daniel Berndt <daniel.berndt@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "build": "db-scripts-bundle --size-snapshot",
+    "lint": "eslint --max-warnings=0 src *.js",
+    "format": "prettier --write '{src,docs}/**/*.{js,css}' '*.js'",
+    "setup": "npm install && npm run validate -s",
+    "prepack": "npm run build",
+    "prepublish-later": "npm run lint",
+    "storybook": "start-storybook -p 6006",
+    "build-storybook": "build-storybook"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.7.5",
+    "@db-scripts/bundle": "^0.2.5",
+    "@db-scripts/eslint-config": "^0.3.0",
+    "@storybook/addon-actions": "^6.0.21",
+    "@storybook/addon-essentials": "^6.0.21",
+    "@storybook/addon-links": "^6.0.21",
+    "@storybook/react": "^6.0.21",
+    "babel-loader": "^8.0.6",
+    "eslint": "^7.9.0",
+    "react": "^16.12.0",
+    "react-dom": "^16.12.0",
+    "react-is": "^16.13.1"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.7.6",
+    "zustand": "^3.1.2"
+  }
+}
