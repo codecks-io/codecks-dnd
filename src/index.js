@@ -105,14 +105,6 @@ const DragElement = ({rect, children}) => {
 };
 
 export const DragController = ({type, renderItem, children}) => {
-  // React.useEffect(
-  //   () =>
-  //     useDragStore.subscribe((state) => {
-  //       console.log(JSON.stringify(state));
-  //     }),
-  //   []
-  // );
-
   const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
   const [dragItemRect, setDragItemRect] = React.useState(null);
@@ -249,6 +241,18 @@ const getPassiveArg = () => {
   return passiveArg;
 };
 
+const getScrollParents = (node) => {
+  const parents = [];
+  let offsetParent = node;
+  while ((offsetParent = offsetParent.offsetParent)) {
+    const overflowYVal = window.getComputedStyle(offsetParent, null).getPropertyValue("overflow-y");
+    if (overflowYVal === "auto" || overflowYVal === "scroll" || offsetParent === document.body) {
+      parents.push(offsetParent === document.body ? window : offsetParent);
+    }
+  }
+  return parents;
+};
+
 const getRectListener = (node, setRect) => {
   const unsubs = [];
   const update = () => {
@@ -256,19 +260,14 @@ const getRectListener = (node, setRect) => {
     const {top, bottom, left, right, width, height} = rect;
     setRect({top, bottom, left, right, width, height});
   };
+  const scrollParents = getScrollParents(node);
+  scrollParents.forEach((parent) => {
+    parent.addEventListener("scroll", update, getPassiveArg());
+    unsubs.push(() => parent.removeEventListener("scroll", update, getPassiveArg()));
+  });
   const ro = new ResizeObserver(update);
   ro.observe(node);
   unsubs.push(() => ro.disconnect());
-
-  let offsetParent = node;
-  while ((offsetParent = offsetParent.offsetParent)) {
-    const overflowYVal = window.getComputedStyle(offsetParent, null).getPropertyValue("overflow-y");
-    if (overflowYVal === "auto" || overflowYVal === "scroll" || offsetParent === document.body) {
-      const parent = offsetParent;
-      parent.addEventListener("scroll", update, getPassiveArg());
-      unsubs.push(() => parent.removeEventListener("scroll", update, getPassiveArg()));
-    }
-  }
 
   window.addEventListener("resize", update);
   unsubs.push(() => window.removeEventListener("resive", update));
@@ -281,12 +280,16 @@ const getRectListener = (node, setRect) => {
   };
 };
 
+const getRelPosition = (rect, pos) => ({
+  x: pos.x - rect.left,
+  y: pos.y - rect.top,
+});
+
 export const useDropZone = ({type, onDragOver, onDrop}) => {
   const nodeRef = React.useRef();
   const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
   const addDropFn = useDragStore((s) => s.addDropFn);
   const [rect, setRect] = React.useState(null);
-  const rectRef = React.useRef(null);
   const isOver = useDragStore((s) =>
     rect && s.dragInfo && isWithin(s.dragInfo.currentPos, rect) ? true : false
   );
@@ -300,6 +303,30 @@ export const useDropZone = ({type, onDragOver, onDrop}) => {
   React.useEffect(() => {
     onDragRef.current = onDragOver;
   }, [onDragOver]);
+
+  const rectRef = React.useRef(rect);
+  React.useEffect(() => {
+    rectRef.current = rect;
+  }, [rect]);
+
+  const lastOverRef = React.useRef(isOver);
+  React.useEffect(() => {
+    if (lastOverRef.current !== isOver) {
+      if (!isOver) {
+        // fire leave event
+        if (onDragRef.current) onDragRef.current({item: dragItem, position: null});
+      } else {
+        // fire enter event
+        if (onDragRef.current) {
+          const {dragInfo} = useDragStore.getState();
+          const position = getRelPosition(rectRef.current, dragInfo.currentPos);
+          onDragRef.current({item: dragItem, position});
+        }
+      }
+    }
+    lastOverRef.current = isOver;
+  }, [isOver, dragItem]);
+
   const hasOnDragCb = !!onDragOver;
 
   React.useEffect(() => {
@@ -308,10 +335,7 @@ export const useDropZone = ({type, onDragOver, onDrop}) => {
         (currentPos) => {
           if (currentPos && rectRef.current && onDragRef.current) {
             if (isWithin(currentPos, rectRef.current)) {
-              const position = {
-                x: currentPos.x - rectRef.current.x,
-                y: currentPos.y - rectRef.current.y,
-              };
+              const position = getRelPosition(rectRef.current, currentPos);
               onDragRef.current({item: dragItem, position});
             }
           }
@@ -323,7 +347,11 @@ export const useDropZone = ({type, onDragOver, onDrop}) => {
 
   React.useEffect(() => {
     if (isOver) {
-      return addDropFn((...args) => onDropRef.current && onDropRef.current(...args));
+      return addDropFn(({item}) => {
+        const {dragInfo} = useDragStore.getState();
+        const position = getRelPosition(rectRef.current, dragInfo.currentPos);
+        onDropRef.current && onDropRef.current({item, position});
+      });
     }
   }, [isOver, addDropFn]);
 
