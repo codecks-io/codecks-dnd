@@ -1,6 +1,6 @@
 {
-  "name": "@cdx/dnd",
-  "version": "0.1.0",
+  "name": "@codecks/dnd",
+  "version": "0.0.0",
   "description": "Drag and Drop",
   "keywords": [
     "react",
@@ -12,7 +12,7 @@
     "dist"
   ],
   "sideEffects": false,
-  "repository": "https://github.com/codecks_io/cdx-dnd",
+  "repository": "https://github.com/codecks_io/codecks-dnd",
   "author": "Daniel Berndt <daniel.berndt@gmail.com>",
   "license": "MIT",
   "scripts": {
@@ -40,7 +40,8 @@
     "react-is": "^16.13.1"
   },
   "peerDependencies": {
-    "react": ">=16.8.0"
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
   },
   "dependencies": {
     "@babel/runtime": "^7.7.6",

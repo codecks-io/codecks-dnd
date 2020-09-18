@@ -1,72 +1,65 @@
-# @cdx/dnd
+# @codecks/dnd
 
 ## Installation
 
 ```bash
-npm install @cdx/dnd
+npm install @codecks/dnd
 ```
 
+## Why?
 
+Working with all kinds of dnd approaches for [Codecks](https://www.codecks.io), it became clear that native html-based drag and drop is still a big pain.
 
-Phases
-- idling
-- pendingDrag
-- lifting?
-- dragging
-- dropping
-- cancelling
+This library is inspired by [react-beautiful-dnd](https://github.com/atlassian/react-beautiful-dnd) but does things differently:
 
-Features
-- drop into
-- reorder
-- multi drag
-  - drag prop isDragged/isCoDragged (isCoDragged, stays where it is, get different style)
-- file drop
-- auto scroll
+- only offering primitives, (i.e. no built-in reordering, no good accessibility story yet, PRs very welcome!). Thus, it's relatively small (< 5kb gzipped)
+- only using Portals for dragged elements (to make a transition to virtualized lists more straight forward)
 
+The library is meant as a substitute for the html-based drag and drop functionality offered via a fairly minimal react-based api.
 
-for mouse events:
-https://github.com/atlassian/react-beautiful-dnd/blob/master/src/view/use-sensor-marshal/sensors/use-mouse-sensor.js
+## Usage
 
-general styles for all kinds of elements in all kinds of situations...
-https://github.com/atlassian/react-beautiful-dnd/blob/master/src/view/use-style-marshal/get-styles.js
+### `<Draggable>`
 
-draggable style:
-https://github.com/atlassian/react-beautiful-dnd/blob/master/src/view/draggable/get-style.js
+```js
+import {DragController, Draggable} from "@codecks/dnd"
 
-Implementation Considerations:
+<DragController type="box" renderItem={({id}) => <Box id={id} />}>
+  <div>
+    {boxes.map((id) => (
+      <Draggable type="box" id={id} key={id}>
+        {({handlers, ref}) => <Box {...handlers} ref={ref} id={id} />}
+      </Draggable>
+    ))}
+  </div>
+</DragController>
+```
+
+`renderItem` is used for rendering the dragged item in a portal, so it's compatible with windowing-based lists.
+
+It's using the render props pattern for the child so it can replace the content with a placeholder while dragging.
+
+### `useDropZone`
+
+```js
+const DropZone = ({width = 200}) => {
+  const {isOver, dragItem, ref} = useDropZone({
+    type: "box",
+    onDragOver: ({item, position}) => console.log("drag"),
+    onDrop: ({item, position}) => console.log("drop!"),
+  });
+
+  return <div ref={ref}>Drop Here!</div>;
+};
+```
+
+`onDragOver's` position will be null when the dragItem leaves the drop zone.
+
+#### Todos:
+
 - add pointer-events: none to everything (i.e. body) while dragging (to avoid hover effects, etc)
-- Drop areas only need active listeners if appropriate element is dragged
-- drop areas don't care for mouse position but for center of drag el: no events on droppables, just calc their positions (constantly?) and use that info
-- the drop area get onDrop handler
-- draggable will get re-mounted on drop into different list (or for virtual lists?)
-- while dragging, all els (incl. placeholder) stay where they are. Reshuffling only via tranforms!
-- using portal while dragging,
-  portal style:
-  ```css
-    .el {
-      position: fixed;
-      top: 0px;
-      left: 195px;
-      box-sizing: border-box;
-      width: 300px;
-      height: 78px;
-      transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1) 0s;
-      z-index: 5000;
-      pointer-events: none;
-      transform: translate(6px, 103px);
-    }
-    ```
-  placeholder style:
-   ```css
-    .placeholder {
-        display: block;
-        box-sizing: border-box;
-        width: 300px;
-        height: 78px;
-        margin: 0px 0px 8px;
-        flex-shrink: 0;
-        flex-grow: 0;
-        pointer-events: none;
-    }
-  ```
+- drag file support?
+
+#### License
+
+Licensed under MIT
