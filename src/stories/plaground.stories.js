@@ -79,8 +79,8 @@ export const Scrollmania = () => (
     <div style={{height: 300, overflow: "auto", background: "cyan", padding: 20}}>
       <div>Text</div>
       <DropArea width={50} />
-      {Array.from(new Array(30)).map(() => (
-        <div>Text</div>
+      {Array.from(new Array(30)).map((_, i) => (
+        <div key={i}>Text</div>
       ))}
       <DropArea width={50} />
       <div>Text</div>
