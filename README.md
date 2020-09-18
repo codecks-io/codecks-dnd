@@ -12,7 +12,7 @@ Working with all kinds of dnd approaches for [Codecks](https://www.codecks.io), 
 
 This library is inspired by [react-beautiful-dnd](https://github.com/atlassian/react-beautiful-dnd) but does things differently:
 
-- only offering primitives, (i.e. no built-in reordering, no good accessibility story yet, PRs very welcome!). Thus, it's relatively small (< 5kb gzipped)
+- only offering primitives, (i.e. no built-in reordering, no good accessibility story yet, PRs very welcome!). Thus, it's relatively small (< 7kb gzipped)
 - only using Portals for dragged elements (to make a transition to virtualized lists more straight forward)
 
 The library is meant as a substitute for the html-based drag and drop functionality offered via a fairly minimal react-based api.

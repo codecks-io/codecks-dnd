@@ -1,6 +1,7 @@
 import React from "react";
 import {createPortal} from "react-dom";
 import create from "zustand";
+import ResizeObserver from "resize-observer-polyfill";
 
 const Portal = ({children}) => {
   const [node] = React.useState(() => document.createElement("div"));
