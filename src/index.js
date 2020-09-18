@@ -72,8 +72,8 @@ const useDragStore = create((set) => ({
   setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
 }));
 
-export const primaryButton = 0;
-export const sloppyClickThreshold = 5;
+const primaryButton = 0;
+const sloppyClickThreshold = 5;
 const isSloppyClickThresholdExceeded = (original, current) =>
   Math.abs(current.x - original.x) >= sloppyClickThreshold ||
   Math.abs(current.y - original.y) >= sloppyClickThreshold;
