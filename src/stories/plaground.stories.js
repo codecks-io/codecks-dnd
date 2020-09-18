@@ -1,4 +1,3 @@
-import {Array} from "globalthis/implementation";
 import React from "react";
 import {DragController, Draggable, useDropZone} from "..";
 
