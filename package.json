@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.7.5",
-    "@db-scripts/bundle": "^0.2.5",
+    "@db-scripts/bundle": "^0.4.1",
     "@db-scripts/eslint-config": "^0.3.0",
     "@storybook/addon-actions": "^6.0.21",
     "@storybook/addon-essentials": "^6.0.21",

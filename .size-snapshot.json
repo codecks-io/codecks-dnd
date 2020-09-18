@@ -1,12 +1,12 @@
 {
-  "dist/@codecks/dnd.umd.js": {
-    "bundled": 65365,
-    "minified": 20296,
-    "gzipped": 6583
+  "dnd.umd.js": {
+    "bundled": 66327,
+    "minified": 20908,
+    "gzipped": 6706
   },
-  "dist/@codecks/dnd.umd.min.js": {
-    "bundled": 20296,
-    "minified": 20251,
-    "gzipped": 6571
+  "dnd.umd.min.js": {
+    "bundled": 20908,
+    "minified": 20875,
+    "gzipped": 6688
   }
 }
