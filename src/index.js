@@ -108,10 +108,12 @@ const isWithin = (point, rect) =>
   point.y >= rect.top &&
   point.y <= rect.top + rect.height;
 
-const DragControllerCtx = React.createContext(() =>
-  // eslint-disable-next-line no-console
-  console.error("You need to wrap the Draggable within a DragController")
-);
+const DragControllerCtx = React.createContext({
+  onItemDragStart: () =>
+    // eslint-disable-next-line no-console
+    console.error("You need to wrap the Draggable within a DragController"),
+  renderPlaceholder: () => null,
+});
 
 let passiveArg = null;
 const getPassiveArg = () => {
@@ -385,10 +387,26 @@ export const useDragItem = (type) => {
   return useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
 };
 
-export const DragController = ({type, renderItem, cancelDragOnUnmount, children}) => {
+const DefaultPlaceholder = () => {
+  const dimensions = useDragStore((s) => s.dragInfo && s.dragInfo.dimensions);
+  return <div style={dimensions} />;
+};
+
+export const DragController = ({
+  type,
+  renderItem,
+  cancelDragOnUnmount,
+  renderPlaceholder,
+  children,
+}) => {
   const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
   const [dragItemRect, setDragItemRect] = React.useState(null);
+
+  const renderPlaceholderRef = React.useRef(renderPlaceholder);
+  React.useEffect(() => {
+    renderPlaceholderRef.current = renderPlaceholder;
+  }, [renderPlaceholder]);
 
   React.useEffect(() => {
     if (dragItemRect && !dragItem) {
@@ -402,20 +420,23 @@ export const DragController = ({type, renderItem, cancelDragOnUnmount, children}
     }
   }, [cancelDragOnUnmount, set, dragItemRect]);
 
-  const onHandleItemDragStart = React.useCallback(
-    ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
-      setDragItemRect(nodeRect);
-      const centerX = nodeRect.left + nodeRect.width / 2;
-      const centerY = nodeRect.top + nodeRect.height / 2;
-      const mouseOffset = {x: centerX - currentPos.x, y: centerY - currentPos.y};
-      const dragInfo = {
-        mouseOffset,
-        startPos: addPos(startPos, mouseOffset),
-        currentPos: addPos(currentPos, mouseOffset),
-        dimensions: {width: nodeRect.width, height: nodeRect.height},
-      };
-      set({item, dragInfo});
-    },
+  const ctxVal = React.useMemo(
+    () => ({
+      onItemDragStart: ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
+        setDragItemRect(nodeRect);
+        const centerX = nodeRect.left + nodeRect.width / 2;
+        const centerY = nodeRect.top + nodeRect.height / 2;
+        const mouseOffset = {x: centerX - currentPos.x, y: centerY - currentPos.y};
+        const dragInfo = {
+          mouseOffset,
+          startPos: addPos(startPos, mouseOffset),
+          currentPos: addPos(currentPos, mouseOffset),
+          dimensions: {width: nodeRect.width, height: nodeRect.height},
+        };
+        set({item, dragInfo});
+      },
+      renderPlaceholder: renderPlaceholderRef.current || (() => <DefaultPlaceholder />),
+    }),
     [set]
   );
   return (
@@ -426,24 +447,16 @@ export const DragController = ({type, renderItem, cancelDragOnUnmount, children}
           <DragElement rect={dragItemRect}>{renderItem(dragItem)}</DragElement>
         </>
       )}
-      <DragControllerCtx.Provider value={onHandleItemDragStart}>
-        {children}
-      </DragControllerCtx.Provider>
+      <DragControllerCtx.Provider value={ctxVal}>{children}</DragControllerCtx.Provider>
     </>
   );
 };
-
-const Placeholder = ({children}) => {
-  const dimensions = useDragStore((s) => s.dragInfo && s.dragInfo.dimensions);
-  return <div style={dimensions}>{children}</div>;
-};
-
 const idleState = {state: "idle", data: null};
 
-export const Draggable = ({type, id, itemData, children, disabled, renderPlaceholder}) => {
-  const onItemDragStart = React.useContext(DragControllerCtx);
+export const Draggable = ({type, id, itemData, children, disabled}) => {
+  const {onItemDragStart, renderPlaceholder} = React.useContext(DragControllerCtx);
   const isDraggingMe = useDragStore((s) =>
-    s.item && s.item.type === type && s.item.id === id ? true : false
+    s.item && s.item.type === type && s.item.id === id ? s.item : false
   );
 
   const [dragState, setDragState] = React.useState(idleState);
@@ -504,7 +517,7 @@ export const Draggable = ({type, id, itemData, children, disabled, renderPlaceho
     }
   }, [dragState, disabled]);
   if (isDraggingMe) {
-    return <Placeholder>{renderPlaceholder ? renderPlaceholder() : null}</Placeholder>;
+    return renderPlaceholder({item: isDraggingMe});
   } else {
     return children({handlers, ref: nodeRef});
   }
@@ -586,8 +599,8 @@ const createAtom = (initialVal = null) => {
   };
 };
 
-// updating the rect shuoldn't cause a re-render of the drop zone and all it's children.
-/// So `setState` is not an option
+// Updating the rect shouldn't cause a re-render of the drop zone and all it's children.
+// So `setState` is not an option
 const useRect = ({dragItem, disabled, nodeRef}) => {
   const [rectAtom] = React.useState(createAtom);
 
