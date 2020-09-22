@@ -59,7 +59,7 @@ const useDragStore = create((set) => ({
       if (listModified) {
         return {
           scrollNodeCountMap: nextMap,
-          scrollNodes: [...nextMap.keys()].reverse(),
+          scrollNodes: Array.from(nextMap.keys()).reverse(),
         };
       } else {
         return {scrollNodeCountMap: nextMap};
@@ -81,7 +81,7 @@ const useDragStore = create((set) => ({
         if (listModified) {
           return {
             scrollNodeCountMap: nextMap,
-            scrollNodes: [...nextMap.keys()].reverse(),
+            scrollNodes: Array.from(nextMap.keys()).reverse(),
           };
         } else {
           return {scrollNodeCountMap: nextMap};
