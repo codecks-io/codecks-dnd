@@ -12,6 +12,27 @@ const Portal = ({children}) => {
   return node ? createPortal(children, node) : null;
 };
 
+let _styleEl = false;
+const ensureStyleEl = () => {
+  if (!_styleEl) {
+    _styleEl = document.createElement("style");
+    _styleEl.type = "text/css";
+    const head = document.querySelector("head");
+    head.append(_styleEl);
+  }
+  return _styleEl;
+};
+
+const useStyle = (rules) => {
+  React.useEffect(() => {
+    const el = ensureStyleEl();
+    el.textContent = rules;
+    return () => {
+      el.textContent = "";
+    };
+  });
+};
+
 const useDragStore = create((set) => ({
   item: null, // {type, id, data}
   dragInfo: null, // {startPos, currentPos, mouseOffset}
@@ -303,12 +324,19 @@ const DragElement = ({rect, children}) => {
       dropFns.some((fn) => fn({item}) !== false);
       set({item: null, setDragInfo: null});
     };
+
+    const onKeyDown = () => {
+      set({item: null, setDragInfo: null});
+    };
+
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("keydown", onKeyDown);
 
     return () => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [set, setDragInfo]);
 
@@ -326,6 +354,11 @@ const DragElement = ({rect, children}) => {
       (state) => state.dragInfo
     );
   }, []);
+
+  useStyle(`
+    body {cursor:grabbing;}
+    body * {pointer-events: none !important}
+  `);
 
   return (
     <Portal>
