@@ -27,7 +27,7 @@ import {DragController, Draggable} from "@codecks/dnd"
 <DragController type="box" renderItem={({id}) => <Box id={id} />}>
   <div>
     {boxes.map((id) => (
-      <Draggable type="box" id={id} key={id}>
+      <Draggable key={id} type="box" id={id} itemData={{id, myProp: true}}>
         {({handlers, ref}) => <Box {...handlers} ref={ref} id={id} />}
       </Draggable>
     ))}
@@ -54,6 +54,12 @@ const DropZone = ({width = 200}) => {
 ```
 
 `onDragOver's` position will be null when the dragItem leaves the drop zone.
+
+#### FAQ
+
+- **My dragged item doesn't appear when dragging!?**
+
+  First, make sure that the DragController is setup correctly with the correct `type`. Also the `renderItem` should _not_ be wrapped with the `Draggable` component.
 
 #### Todos:
 

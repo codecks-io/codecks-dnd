@@ -78,11 +78,18 @@ const isSloppyClickThresholdExceeded = (original, current) =>
   Math.abs(current.x - original.x) >= sloppyClickThreshold ||
   Math.abs(current.y - original.y) >= sloppyClickThreshold;
 
-const add = (p1, p2) => ({x: p1.x + p2.x, y: p1.y + p2.y});
+const addPos = (p1, p2) => ({x: p1.x + p2.x, y: p1.y + p2.y});
+const subPos = (p1, p2) => ({x: p1.x - p2.x, y: p1.y - p2.y});
+const eqPos = (p1, p2) => p1.x === p2.x && p1.y === p2.y;
+const isWithin = (point, rect) =>
+  point.x >= rect.left &&
+  point.x <= rect.left + rect.width &&
+  point.y >= rect.top &&
+  point.y <= rect.top + rect.height;
 
 const DragControllerCtx = React.createContext(() =>
   // eslint-disable-next-line no-console
-  console.error("You need to wrap the Draggable wihtin a DragController")
+  console.error("You need to wrap the Draggable within a DragController")
 );
 
 let passiveArg = null;
@@ -108,7 +115,6 @@ const useScrollContainerStore = create((set) => ({
   activeScrollNode: null, // {id, node, intensity}
   setActiveScrollNode: (next) =>
     set(({activeScrollNode: prev}) => {
-      // console.log({prev, next});
       if (next === null || prev === null) return {activeScrollNode: next};
       if (next.id === prev.id && prev.intensity === next.intensity) {
         return {activeScrollNode: prev};
@@ -192,18 +198,18 @@ const ScrollListener = ({node, id}) => {
   return null;
 };
 
-const updateActiveScrollNode = (currentPos, nodes) => {
+const updateActiveScrollNode = (mousePos, nodes) => {
   const {setActiveScrollNode} = useScrollContainerStore.getState();
   for (const {id, node, canScrollUp, canScrollDown, topRect, bottomRect} of nodes.values()) {
-    if (isWithin(currentPos, topRect)) {
+    if (isWithin(mousePos, topRect)) {
       if (canScrollUp) {
-        const relDistanceToTop = (currentPos.y - topRect.top) / topRect.height;
+        const relDistanceToTop = (mousePos.y - topRect.top) / topRect.height;
         const intensity = -Math.max(1, Math.ceil((1 - relDistanceToTop) * 6));
         setActiveScrollNode({id, node, intensity});
         return;
       }
-    } else if (isWithin(currentPos, bottomRect)) {
-      const relDistanceToBottom = (bottomRect.bottom - currentPos.y) / bottomRect.height;
+    } else if (isWithin(mousePos, bottomRect)) {
+      const relDistanceToBottom = (bottomRect.bottom - mousePos.y) / bottomRect.height;
       const intensity = Math.max(1, Math.ceil((1 - relDistanceToBottom) * 6));
       if (canScrollDown) {
         setActiveScrollNode({id, node, intensity});
@@ -252,13 +258,18 @@ const ScrollListeners = () => {
   React.useEffect(() => {
     const unsubDragInfo = useDragStore.subscribe(
       (dragInfo) => {
-        updateActiveScrollNode(dragInfo.currentPos, useScrollContainerStore.getState().nodes);
+        dragInfo &&
+          updateActiveScrollNode(
+            subPos(dragInfo.currentPos, dragInfo.mouseOffset),
+            useScrollContainerStore.getState().nodes
+          );
       },
       (state) => state.dragInfo
     );
     const unsubScrollInfo = useScrollContainerStore.subscribe(
       (nodes) => {
-        updateActiveScrollNode(useDragStore.getState().dragInfo.currentPos, nodes);
+        const {dragInfo} = useDragStore.getState();
+        updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), nodes);
       },
       (state) => state.nodes
     );
@@ -282,7 +293,7 @@ const DragElement = ({rect, children}) => {
         dragInfo: {
           startPos: prev.startPos,
           mouseOffset: prev.mouseOffset,
-          currentPos: add(point, prev.mouseOffset),
+          currentPos: addPos(point, prev.mouseOffset),
           dimensions: prev.dimensions,
         },
       }));
@@ -337,7 +348,11 @@ const DragElement = ({rect, children}) => {
   );
 };
 
-export const DragController = ({type, renderItem, children}) => {
+export const useDragItem = (type) => {
+  return useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
+};
+
+export const DragController = ({type, renderItem, cancelDragOnUnmount, children}) => {
   const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
   const [dragItemRect, setDragItemRect] = React.useState(null);
@@ -348,6 +363,12 @@ export const DragController = ({type, renderItem, children}) => {
     }
   }, [dragItem, dragItemRect]);
 
+  React.useEffect(() => {
+    if (cancelDragOnUnmount && dragItemRect) {
+      return () => set({item: null, setDragInfo: null});
+    }
+  }, [cancelDragOnUnmount, set, dragItemRect]);
+
   const onHandleItemDragStart = React.useCallback(
     ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
       setDragItemRect(nodeRect);
@@ -356,8 +377,8 @@ export const DragController = ({type, renderItem, children}) => {
       const mouseOffset = {x: centerX - currentPos.x, y: centerY - currentPos.y};
       const dragInfo = {
         mouseOffset,
-        startPos: add(startPos, mouseOffset),
-        currentPos: add(currentPos, mouseOffset),
+        startPos: addPos(startPos, mouseOffset),
+        currentPos: addPos(currentPos, mouseOffset),
         dimensions: {width: nodeRect.width, height: nodeRect.height},
       };
       set({item, dragInfo});
@@ -386,7 +407,7 @@ const Placeholder = ({children}) => {
 
 const idleState = {state: "idle", data: null};
 
-export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => {
+export const Draggable = ({type, id, itemData, children, disabled, renderPlaceholder}) => {
   const onItemDragStart = React.useContext(DragControllerCtx);
   const isDraggingMe = useDragStore((s) =>
     s.item && s.item.type === type && s.item.id === id ? true : false
@@ -405,17 +426,16 @@ export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => 
       const rect = nodeRef.current.getBoundingClientRect();
       const {top, bottom, left, right, height, width} = rect;
       const nodeRect = {top, bottom, left, right, height, width};
-      onItemDragStart({
-        item: {id, type, data: itemDataRef.current},
-        nodeRect,
-        dragInfo: dragState.data,
-      });
+      const rawData = itemDataRef.current;
+      const data = typeof rawData === "function" ? rawData() : rawData;
+      onItemDragStart({item: {id, type, data}, nodeRect, dragInfo: dragState.data});
       setDragState(idleState);
     }
   }, [dragState, id, onItemDragStart, type]);
 
   const handlers = React.useMemo(() => {
     if (dragState.state === "idle") {
+      if (disabled) return {};
       return {
         onMouseDown: (e) => {
           if (e.defaultPrevented) return;
@@ -429,6 +449,10 @@ export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => 
       const cancel = () => {
         setDragState(idleState);
       };
+      if (disabled) {
+        cancel();
+        return {};
+      }
       return {
         onMouseMove: (e) => {
           if (e.button !== primaryButton) return;
@@ -445,19 +469,13 @@ export const Draggable = ({type, id, itemData, children, renderPlaceholder}) => 
         onMouseDown: cancel,
       };
     }
-  }, [dragState]);
+  }, [dragState, disabled]);
   if (isDraggingMe) {
     return <Placeholder>{renderPlaceholder ? renderPlaceholder() : null}</Placeholder>;
   } else {
     return children({handlers, ref: nodeRef});
   }
 };
-
-const isWithin = (point, rect) =>
-  point.x >= rect.left &&
-  point.x <= rect.left + rect.width &&
-  point.y >= rect.top &&
-  point.y <= rect.top + rect.height;
 
 const getScrollParents = (node) => {
   const parents = [];
@@ -514,87 +532,119 @@ const getRelPosition = (rect, pos) => ({
   y: pos.y - rect.top,
 });
 
-export const useDropZone = ({type, onDragOver, onDrop}) => {
-  const nodeRef = React.useRef();
-  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
-  const addDropFn = useDragStore((s) => s.addDropFn);
-  const registerScrollContainer = useDragStore((s) => s.registerScrollContainer);
-  const [rect, setRect] = React.useState(null);
-  const isOver = useDragStore((s) =>
-    rect && s.dragInfo && isWithin(s.dragInfo.currentPos, rect) ? true : false
-  );
-
-  const onDropRef = React.useRef(onDrop);
-  React.useEffect(() => {
-    onDropRef.current = onDrop;
-  }, [onDrop]);
-
-  const onDragRef = React.useRef(onDragOver);
-  React.useEffect(() => {
-    onDragRef.current = onDragOver;
-  }, [onDragOver]);
-
-  const rectRef = React.useRef(rect);
-  React.useEffect(() => {
-    rectRef.current = rect;
-  }, [rect]);
-
-  const lastOverRef = React.useRef(isOver);
-  React.useEffect(() => {
-    if (lastOverRef.current !== isOver) {
-      if (!isOver) {
-        // fire leave event
-        if (onDragRef.current) onDragRef.current({item: dragItem, position: null});
-      } else {
-        // fire enter event
-        if (onDragRef.current) {
-          const {dragInfo} = useDragStore.getState();
-          const position = getRelPosition(rectRef.current, dragInfo.currentPos);
-          onDragRef.current({item: dragItem, position});
-        }
+const createAtom = (initialVal = null) => {
+  let atom = initialVal;
+  let subscriber = null;
+  return {
+    get: () => atom,
+    set: (val) => {
+      if (val !== atom) {
+        atom = val;
+        if (subscriber) subscriber(val);
       }
-    }
-    lastOverRef.current = isOver;
-  }, [isOver, dragItem]);
+    },
+    // only meant for a single subscriber
+    subscribe: (subFn) => {
+      subscriber = subFn;
+      return () => {
+        subscriber = null;
+      };
+    },
+  };
+};
 
-  const hasOnDragCb = !!onDragOver;
+// updating the rect shuoldn't cause a re-render of the drop zone and all it's children.
+/// So `setState` is not an option
+const useRect = ({dragItem, disabled, nodeRef}) => {
+  const [rectAtom] = React.useState(createAtom);
 
-  React.useEffect(() => {
-    if (hasOnDragCb && dragItem) {
-      return useDragStore.subscribe(
-        (currentPos) => {
-          if (currentPos && rectRef.current && onDragRef.current) {
-            if (isWithin(currentPos, rectRef.current)) {
-              const position = getRelPosition(rectRef.current, currentPos);
-              onDragRef.current({item: dragItem, position});
-            }
-          }
-        },
-        (state) => state.dragInfo && state.dragInfo.currentPos
-      );
-    }
-  }, [dragItem, hasOnDragCb]);
-
-  React.useEffect(() => {
-    if (isOver) {
-      return addDropFn(({item}) => {
-        const {dragInfo} = useDragStore.getState();
-        const position = getRelPosition(rectRef.current, dragInfo.currentPos);
-        onDropRef.current && onDropRef.current({item, position});
-      });
-    }
-  }, [isOver, addDropFn]);
-
+  const registerScrollContainer = useDragStore((s) => s.registerScrollContainer);
   React.useLayoutEffect(() => {
-    if (dragItem && nodeRef.current) {
-      const {unsubFn, scrollParents} = getRectListener(nodeRef.current, setRect);
+    if (!disabled && dragItem && nodeRef.current) {
+      const {unsubFn, scrollParents} = getRectListener(nodeRef.current, rectAtom.set);
       const unsubScrollContainers = registerScrollContainer(scrollParents);
       return () => {
         unsubFn();
         unsubScrollContainers();
       };
     }
-  }, [dragItem, registerScrollContainer]);
+  }, [dragItem, registerScrollContainer, disabled, nodeRef, rectAtom]);
+
+  return {getRect: rectAtom.get, rectSubscribe: rectAtom.subscribe};
+};
+
+export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
+  const nodeRef = React.useRef();
+  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
+
+  const [isOver, setOver] = React.useState(false);
+  const lastSentDragPosRef = React.useRef(null);
+
+  const {getRect, rectSubscribe} = useRect({dragItem, disabled, nodeRef});
+  const addDropFn = useDragStore((s) => s.addDropFn);
+
+  const onDropRef = React.useRef(onDrop);
+  React.useEffect(() => {
+    onDropRef.current = onDrop;
+  }, [onDrop]);
+
+  const onDragOverRef = React.useRef(onDragOver);
+  React.useEffect(() => {
+    onDragOverRef.current = onDragOver;
+  }, [onDragOver]);
+
+  // manage isOver and call onDragOver handler if dragPos or rect has changed
+  React.useEffect(() => {
+    const isntOver = () => {
+      setOver(false);
+      if (lastSentDragPosRef.current !== null) {
+        // call leave handler
+        if (onDragOverRef.current) onDragOverRef.current({item: dragItem, position: null});
+      }
+      lastSentDragPosRef.current = null;
+    };
+    if (!disabled && dragItem) {
+      const check = (currentPos, rect) => {
+        if (currentPos && rect && isWithin(currentPos, rect)) {
+          setOver(true);
+          if (!lastSentDragPosRef.current || !eqPos(lastSentDragPosRef.current, currentPos)) {
+            if (onDragOverRef.current) {
+              const position = getRelPosition(rect, currentPos);
+              onDragOverRef.current({item: dragItem, position});
+              lastSentDragPosRef.current = currentPos;
+            }
+          }
+        } else {
+          isntOver();
+        }
+      };
+      const unsub1 = useDragStore.subscribe(
+        (currentPos) => check(currentPos, getRect()),
+        (state) => state.dragInfo && state.dragInfo.currentPos
+      );
+      const unsub2 = rectSubscribe((rect) => {
+        const {dragInfo} = useDragStore.getState();
+        check(dragInfo && dragInfo.currentPos, rect);
+      });
+      return () => {
+        unsub1();
+        unsub2();
+      };
+    } else {
+      isntOver();
+    }
+  }, [disabled, dragItem, getRect, rectSubscribe]);
+
+  // register onDrop handler if isOver is true
+  React.useEffect(() => {
+    if (isOver) {
+      return addDropFn(({item}) => {
+        const {dragInfo} = useDragStore.getState();
+        const position = getRelPosition(getRect(), dragInfo.currentPos);
+        onDropRef.current && onDropRef.current({item, position});
+      });
+    }
+  }, [isOver, addDropFn, getRect]);
 
   return {ref: nodeRef, dragItem, isOver};
 };
