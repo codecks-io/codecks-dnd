@@ -2,6 +2,7 @@ import React from "react";
 import {createPortal} from "react-dom";
 import create from "zustand";
 import ResizeObserver from "resize-observer-polyfill";
+import mergeRefs from "react-merge-refs";
 
 const Portal = ({children}) => {
   const [node] = React.useState(() => document.createElement("div"));
@@ -453,7 +454,7 @@ export const DragController = ({
 };
 const idleState = {state: "idle", data: null};
 
-export const Draggable = ({type, id, itemData, children, disabled}) => {
+export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) => {
   const {onItemDragStart, renderPlaceholder} = React.useContext(DragControllerCtx);
   const isDraggingMe = useDragStore((s) =>
     s.item && s.item.type === type && s.item.id === id ? s.item : false
@@ -461,6 +462,10 @@ export const Draggable = ({type, id, itemData, children, disabled}) => {
 
   const [dragState, setDragState] = React.useState(idleState);
   const nodeRef = React.useRef();
+
+  const passedRef = React.useMemo(() => {
+    return mergeRef ? mergeRefs([nodeRef, mergeRef]) : nodeRef;
+  }, [mergeRef]);
 
   const itemDataRef = React.useRef(itemData);
   React.useEffect(() => {
@@ -519,7 +524,7 @@ export const Draggable = ({type, id, itemData, children, disabled}) => {
   if (isDraggingMe) {
     return renderPlaceholder({item: isDraggingMe});
   } else {
-    return children({handlers, ref: nodeRef});
+    return children({handlers, ref: passedRef});
   }
 };
 
