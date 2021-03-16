@@ -3,6 +3,7 @@ import {createPortal} from "react-dom";
 import create from "zustand";
 import ResizeObserver from "resize-observer-polyfill";
 import mergeRefs from "react-merge-refs";
+import {forwardRef} from "react";
 
 const Portal = ({children}) => {
   const [node] = React.useState(() => document.createElement("div"));
@@ -388,10 +389,10 @@ export const useDragItem = (type) => {
   return useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
 };
 
-const DefaultPlaceholder = () => {
+const DefaultPlaceholder = forwardRef((props, ref) => {
   const dimensions = useDragStore((s) => s.dragInfo && s.dragInfo.dimensions);
-  return <div style={dimensions} />;
-};
+  return <div style={dimensions} ref={ref} />;
+});
 
 export const DragController = ({
   type,
@@ -436,7 +437,8 @@ export const DragController = ({
         };
         set({item, dragInfo});
       },
-      renderPlaceholder: renderPlaceholderRef.current || (() => <DefaultPlaceholder />),
+      renderPlaceholder:
+        renderPlaceholderRef.current || (({ref}) => <DefaultPlaceholder ref={ref} />),
     }),
     [set]
   );
@@ -522,7 +524,7 @@ export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) =>
     }
   }, [dragState, disabled]);
   if (isDraggingMe) {
-    return renderPlaceholder({item: isDraggingMe});
+    return renderPlaceholder({item: isDraggingMe, ref: passedRef});
   } else {
     return children({handlers, ref: passedRef});
   }
