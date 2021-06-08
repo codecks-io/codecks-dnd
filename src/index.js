@@ -417,7 +417,9 @@ export const DragController = ({
   children,
 }) => {
   const set = useDragStore((s) => s.set);
-  const dragItem = useDragItem(type);
+  const dragItem = useDragStore((s) =>
+    s.item && s.item.type === type && s.item.layerKey === layerKey ? s.item : null
+  );
   const [dragItemRect, setDragItemRect] = useState(null);
 
   const renderPlaceholderRef = useRef(renderPlaceholder);
@@ -457,7 +459,7 @@ export const DragController = ({
     }),
     [set]
   );
-  return (
+  const baseComp = (
     <>
       {dragItemRect && dragItem && (
         <>
@@ -473,6 +475,11 @@ export const DragController = ({
         <DragControllerCtx.Provider value={ctxVal}>{children}</DragControllerCtx.Provider>
       )}
     </>
+  );
+  return layerKey ? (
+    <LayerContext.Provider value={layerKey}>{baseComp}</LayerContext.Provider>
+  ) : (
+    baseComp
   );
 };
 const idleState = {state: "idle", data: null};
