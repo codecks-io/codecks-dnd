@@ -1,12 +1,12 @@
 {
   "dnd.umd.js": {
-    "bundled": 70783,
-    "minified": 22471,
-    "gzipped": 7262
+    "bundled": 70652,
+    "minified": 22455,
+    "gzipped": 7340
   },
   "dnd.umd.min.js": {
-    "bundled": 22452,
-    "minified": 22415,
-    "gzipped": 7236
+    "bundled": 22436,
+    "minified": 22391,
+    "gzipped": 7317
   }
 }
