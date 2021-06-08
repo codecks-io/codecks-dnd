@@ -1,13 +1,21 @@
-import React from "react";
+import React, {
+  createContext,
+  forwardRef,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {createPortal} from "react-dom";
 import create from "zustand";
 import ResizeObserver from "resize-observer-polyfill";
 import mergeRefs from "react-merge-refs";
-import {forwardRef} from "react";
 
 const Portal = ({children}) => {
-  const [node] = React.useState(() => document.createElement("div"));
-  React.useLayoutEffect(() => {
+  const [node] = useState(() => document.createElement("div"));
+  useLayoutEffect(() => {
     document.body.appendChild(node);
     return () => document.body.removeChild(node);
   }, [node]);
@@ -26,7 +34,7 @@ const ensureStyleEl = () => {
 };
 
 const useStyle = (rules) => {
-  React.useEffect(() => {
+  useEffect(() => {
     const el = ensureStyleEl();
     el.textContent = rules;
     return () => {
@@ -110,7 +118,7 @@ const isWithin = (point, rect) =>
   point.y >= rect.top &&
   point.y <= rect.top + rect.height;
 
-const DragControllerCtx = React.createContext({
+const DragControllerCtx = createContext({
   onItemDragStart: () =>
     // eslint-disable-next-line no-console
     console.error("You need to wrap the Draggable within a DragController"),
@@ -182,7 +190,7 @@ const getScrollInfo = (node) => {
 
 const ScrollListener = ({node, id}) => {
   const setNode = useScrollContainerStore((s) => s.setNode);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     const setRect = (rect) => {
       if (rect) {
         const scrollRectHeight = Math.min(
@@ -249,9 +257,9 @@ const ScrollListeners = () => {
   const scrollNodes = useDragStore((s) => s.scrollNodes);
   const activeScrollNode = useScrollContainerStore((s) => s.activeScrollNode);
 
-  const momentumRef = React.useRef(0);
+  const momentumRef = useRef(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!activeScrollNode) {
       momentumRef.current = 0;
       return;
@@ -280,7 +288,7 @@ const ScrollListeners = () => {
     };
   }, [activeScrollNode]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const unsubDragInfo = useDragStore.subscribe(
       (dragInfo) => {
         dragInfo &&
@@ -309,9 +317,9 @@ const ScrollListeners = () => {
 const DragElement = ({rect, children}) => {
   const setDragInfo = useDragStore((s) => s.setDragInfo);
   const set = useDragStore((s) => s.set);
-  const nodeRef = React.useRef();
+  const nodeRef = useRef();
 
-  React.useEffect(() => {
+  useEffect(() => {
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
       setDragInfo((prev) => ({
@@ -344,7 +352,7 @@ const DragElement = ({rect, children}) => {
     };
   }, [set, setDragInfo]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     return useDragStore.subscribe(
       (dragInfo) => {
         if (dragInfo) {
@@ -386,7 +394,10 @@ const DragElement = ({rect, children}) => {
 };
 
 export const useDragItem = (type) => {
-  return useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
+  const layerKey = useLayer();
+  return useDragStore((s) =>
+    s.item && s.item.type === type && s.item.layerKey === layerKey ? s.item : null
+  );
 };
 
 const DefaultPlaceholder = forwardRef((props, ref) => {
@@ -394,35 +405,39 @@ const DefaultPlaceholder = forwardRef((props, ref) => {
   return <div style={dimensions} ref={ref} />;
 });
 
+const LayerContext = createContext(null);
+const useLayer = () => useContext(LayerContext);
+
 export const DragController = ({
   type,
   renderItem,
   cancelDragOnUnmount,
   renderPlaceholder,
+  layerKey,
   children,
 }) => {
   const set = useDragStore((s) => s.set);
-  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
-  const [dragItemRect, setDragItemRect] = React.useState(null);
+  const dragItem = useDragItem(type);
+  const [dragItemRect, setDragItemRect] = useState(null);
 
-  const renderPlaceholderRef = React.useRef(renderPlaceholder);
-  React.useEffect(() => {
+  const renderPlaceholderRef = useRef(renderPlaceholder);
+  useEffect(() => {
     renderPlaceholderRef.current = renderPlaceholder;
   }, [renderPlaceholder]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (dragItemRect && !dragItem) {
       setDragItemRect(null);
     }
   }, [dragItem, dragItemRect]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (cancelDragOnUnmount && dragItemRect) {
       return () => set({item: null, setDragInfo: null});
     }
   }, [cancelDragOnUnmount, set, dragItemRect]);
 
-  const ctxVal = React.useMemo(
+  const ctxVal = useMemo(
     () => ({
       onItemDragStart: ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
         setDragItemRect(nodeRect);
@@ -450,43 +465,52 @@ export const DragController = ({
           <DragElement rect={dragItemRect}>{renderItem(dragItem)}</DragElement>
         </>
       )}
-      <DragControllerCtx.Provider value={ctxVal}>{children}</DragControllerCtx.Provider>
+      {layerKey ? (
+        <LayerContext.Provider value={layerKey}>
+          <DragControllerCtx.Provider value={ctxVal}>{children}</DragControllerCtx.Provider>
+        </LayerContext.Provider>
+      ) : (
+        <DragControllerCtx.Provider value={ctxVal}>{children}</DragControllerCtx.Provider>
+      )}
     </>
   );
 };
 const idleState = {state: "idle", data: null};
 
 export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) => {
-  const {onItemDragStart, renderPlaceholder} = React.useContext(DragControllerCtx);
+  const {onItemDragStart, renderPlaceholder} = useContext(DragControllerCtx);
+  const layerKey = useLayer();
   const isDraggingMe = useDragStore((s) =>
-    s.item && s.item.type === type && s.item.id === id ? s.item : false
+    s.item && s.item.type === type && s.item.layerKey === layerKey && s.item.id === id
+      ? s.item
+      : false
   );
 
-  const [dragState, setDragState] = React.useState(idleState);
-  const nodeRef = React.useRef();
+  const [dragState, setDragState] = useState(idleState);
+  const nodeRef = useRef();
 
-  const passedRef = React.useMemo(() => {
+  const passedRef = useMemo(() => {
     return mergeRef ? mergeRefs([nodeRef, mergeRef]) : nodeRef;
   }, [mergeRef]);
 
-  const itemDataRef = React.useRef(itemData);
-  React.useEffect(() => {
+  const itemDataRef = useRef(itemData);
+  useEffect(() => {
     itemDataRef.current = itemData;
   }, [itemData]);
 
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (nodeRef.current && dragState.state === "started") {
       const rect = nodeRef.current.getBoundingClientRect();
       const {top, bottom, left, right, height, width} = rect;
       const nodeRect = {top, bottom, left, right, height, width};
       const rawData = itemDataRef.current;
       const data = typeof rawData === "function" ? rawData() : rawData;
-      onItemDragStart({item: {id, type, data}, nodeRect, dragInfo: dragState.data});
+      onItemDragStart({item: {id, type, data, layerKey}, nodeRect, dragInfo: dragState.data});
       setDragState(idleState);
     }
-  }, [dragState, id, onItemDragStart, type]);
+  }, [dragState, id, onItemDragStart, type, layerKey]);
 
-  const handlers = React.useMemo(() => {
+  const handlers = useMemo(() => {
     if (dragState.state === "idle") {
       if (disabled) return {};
       return {
@@ -606,13 +630,13 @@ const createAtom = (initialVal = null) => {
   };
 };
 
-// Updating the rect shouldn't cause a re-render of the drop zone and all it's children.
+// Updating the rect shouldn't cause a re-render of the drop zone and all its children.
 // So `setState` is not an option
 const useRect = ({dragItem, disabled, nodeRef}) => {
-  const [rectAtom] = React.useState(createAtom);
+  const [rectAtom] = useState(createAtom);
 
   const registerScrollContainer = useDragStore((s) => s.registerScrollContainer);
-  React.useLayoutEffect(() => {
+  useLayoutEffect(() => {
     if (!disabled && dragItem && nodeRef.current) {
       const {unsubFn, scrollParents} = getRectListener(nodeRef.current, rectAtom.set);
       const unsubScrollContainers = registerScrollContainer(scrollParents);
@@ -627,27 +651,27 @@ const useRect = ({dragItem, disabled, nodeRef}) => {
 };
 
 export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
-  const nodeRef = React.useRef();
-  const dragItem = useDragStore((s) => (s.item && s.item.type === type ? s.item : null));
+  const nodeRef = useRef();
+  const dragItem = useDragItem(type);
 
-  const [isOver, setOver] = React.useState(false);
-  const lastSentDragPosRef = React.useRef(null);
+  const [isOver, setOver] = useState(false);
+  const lastSentDragPosRef = useRef(null);
 
   const {getRect, rectSubscribe} = useRect({dragItem, disabled, nodeRef});
   const addDropFn = useDragStore((s) => s.addDropFn);
 
-  const onDropRef = React.useRef(onDrop);
-  React.useEffect(() => {
+  const onDropRef = useRef(onDrop);
+  useEffect(() => {
     onDropRef.current = onDrop;
   }, [onDrop]);
 
-  const onDragOverRef = React.useRef(onDragOver);
-  React.useEffect(() => {
+  const onDragOverRef = useRef(onDragOver);
+  useEffect(() => {
     onDragOverRef.current = onDragOver;
   }, [onDragOver]);
 
   // manage isOver and call onDragOver handler if dragPos or rect has changed
-  React.useEffect(() => {
+  useEffect(() => {
     const isntOver = () => {
       setOver(false);
       if (lastSentDragPosRef.current !== null) {
@@ -689,7 +713,7 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
   }, [disabled, dragItem, getRect, rectSubscribe]);
 
   // register onDrop handler if isOver is true
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOver) {
       return addDropFn(({item}) => {
         const {dragInfo} = useDragStore.getState();
