@@ -418,7 +418,7 @@ export const DragController = ({
 }) => {
   const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) =>
-    s.item && s.item.type === type && s.item.layerKey === layerKey ? s.item : null
+    s.item && s.item.type === type && s.item.layerKey === (layerKey || null) ? s.item : null
   );
   const [dragItemRect, setDragItemRect] = useState(null);
 
