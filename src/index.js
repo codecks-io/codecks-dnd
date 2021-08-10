@@ -291,18 +291,21 @@ const ScrollListeners = () => {
   useEffect(() => {
     const unsubDragInfo = useDragStore.subscribe(
       (dragInfo) => {
-        dragInfo &&
+        if (dragInfo) {
           updateActiveScrollNode(
             subPos(dragInfo.currentPos, dragInfo.mouseOffset),
             useScrollContainerStore.getState().nodes
           );
+        }
       },
       (state) => state.dragInfo
     );
     const unsubScrollInfo = useScrollContainerStore.subscribe(
       (nodes) => {
         const {dragInfo} = useDragStore.getState();
-        updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), nodes);
+        if (dragInfo) {
+          updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), nodes);
+        }
       },
       (state) => state.nodes
     );
@@ -323,7 +326,7 @@ const DragElement = ({rect, children}) => {
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
       setDragInfo((prev) => ({
-        dragInfo: {
+        dragInfo: prev && {
           startPos: prev.startPos,
           mouseOffset: prev.mouseOffset,
           currentPos: addPos(point, prev.mouseOffset),
@@ -334,11 +337,11 @@ const DragElement = ({rect, children}) => {
     const onMouseUp = () => {
       const {dropFns, item} = useDragStore.getState();
       dropFns.some((fn) => fn({item}) !== false);
-      set({item: null, setDragInfo: null});
+      set({item: null, dragInfo: null});
     };
 
     const onKeyDown = () => {
-      set({item: null, setDragInfo: null});
+      set({item: null, dragInfo: null});
     };
 
     document.addEventListener("mousemove", onMouseMove);
@@ -435,7 +438,7 @@ export const DragController = ({
 
   useEffect(() => {
     if (cancelDragOnUnmount && dragItemRect) {
-      return () => set({item: null, setDragInfo: null});
+      return () => set({item: null, dragInfo: null});
     }
   }, [cancelDragOnUnmount, set, dragItemRect]);
 
