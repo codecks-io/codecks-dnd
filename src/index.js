@@ -569,15 +569,30 @@ const getScrollParents = (node) => {
   let currNode = node;
   while ((currNode = currNode.parentElement)) {
     const overflowYVal = window.getComputedStyle(currNode, null).getPropertyValue("overflow-y");
-    if (overflowYVal === "auto" || overflowYVal === "scroll" || currNode === document.body) {
-      parents.push(currNode === document.body ? window : currNode);
+    const isBody = currNode === document.body;
+    if (overflowYVal === "auto" || overflowYVal === "scroll" || isBody) {
+      parents.push(isBody ? window : currNode);
     }
   }
   return parents;
 };
 
+const intersectWithParents = (childRect, scrollParents) => {
+  let {top, bottom, left, right} = childRect;
+  scrollParents.forEach((parent) => {
+    if (parent === window) return;
+    const pRect = parent.getBoundingClientRect();
+    top = Math.max(pRect.top, top);
+    left = Math.max(pRect.left, left);
+    right = Math.min(pRect.right, right);
+    bottom = Math.min(pRect.bottom, bottom);
+  });
+  return {top, bottom, left, right};
+};
+
 const getRectListener = (node, setRect) => {
   const unsubs = [];
+  const scrollParents = getScrollParents(node);
   const update = () => {
     if (node === window) {
       const width = document.documentElement.clientWidth;
@@ -585,11 +600,10 @@ const getRectListener = (node, setRect) => {
       setRect({top: 0, left: 0, width, height, bottom: height, right: width});
     } else {
       const rect = node.getBoundingClientRect();
-      const {top, bottom, left, right, width, height} = rect;
-      setRect({top, bottom, left, right, width, height});
+      const {top, bottom, left, right} = intersectWithParents(rect, scrollParents);
+      setRect({top, bottom, left, right, width: right - left, height: bottom - top});
     }
   };
-  const scrollParents = getScrollParents(node);
   scrollParents.forEach((parent) => {
     parent.addEventListener("scroll", update, getPassiveArg());
     unsubs.push(() => parent.removeEventListener("scroll", update, getPassiveArg()));

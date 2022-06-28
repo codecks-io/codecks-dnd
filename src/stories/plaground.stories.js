@@ -87,6 +87,33 @@ export const Scrollmania = () => (
   </div>
 );
 
+export const ScrollmaniaWithOverlay = () => (
+  <div style={{display: "flex", height: "120vh", position: "relative"}}>
+    <div>
+      <DragController type="box" renderItem={({id}) => <Box id={id} />}>
+        <div style={{display: "flex"}}>
+          {boxes.map((id) => (
+            <Draggable type="box" id={id} key={id}>
+              {({handlers, ref}) => <Box {...handlers} ref={ref} id={id} />}
+            </Draggable>
+          ))}
+        </div>
+      </DragController>
+    </div>
+    <div
+      style={{height: 300, overflow: "auto", background: "cyan", padding: 20, marginTop: 30}}
+      id="overflowParent"
+    >
+      <div style={{marginTop: -60}} />
+      <DropArea width={50} />
+      {Array.from(new Array(30)).map((_, i) => (
+        <div key={i}>Text</div>
+      ))}
+      <div>Text</div>
+    </div>
+  </div>
+);
+
 export default {
   title: "Plaground",
   component: Playground,
