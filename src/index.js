@@ -579,15 +579,21 @@ const getScrollParents = (node) => {
 
 const intersectWithParents = (childRect, scrollParents) => {
   let {top, bottom, left, right} = childRect;
+  let invisibleTop = 0;
+  let invisibleLeft = 0;
   scrollParents.forEach((parent) => {
     if (parent === window) return;
     const pRect = parent.getBoundingClientRect();
-    top = Math.max(pRect.top, top);
-    left = Math.max(pRect.left, left);
+    const nextTop = Math.max(pRect.top, top);
+    invisibleTop += nextTop - top;
+    top = nextTop;
+    const nextLeft = Math.max(pRect.left, left);
+    invisibleLeft += nextLeft - left;
+    top = nextTop;
     right = Math.min(pRect.right, right);
     bottom = Math.min(pRect.bottom, bottom);
   });
-  return {top, bottom, left, right};
+  return {top, bottom, left, right, invisibleTop, invisibleLeft};
 };
 
 const getRectListener = (node, setRect) => {
@@ -600,8 +606,20 @@ const getRectListener = (node, setRect) => {
       setRect({top: 0, left: 0, width, height, bottom: height, right: width});
     } else {
       const rect = node.getBoundingClientRect();
-      const {top, bottom, left, right} = intersectWithParents(rect, scrollParents);
-      setRect({top, bottom, left, right, width: right - left, height: bottom - top});
+      const {top, bottom, left, right, invisibleTop, invisibleLeft} = intersectWithParents(
+        rect,
+        scrollParents
+      );
+      setRect({
+        top,
+        bottom,
+        left,
+        right,
+        width: right - left,
+        height: bottom - top,
+        invisibleTop,
+        invisibleLeft,
+      });
     }
   };
   scrollParents.forEach((parent) => {
@@ -629,8 +647,8 @@ const getRectListener = (node, setRect) => {
 };
 
 const getRelPosition = (rect, pos) => ({
-  x: pos.x - rect.left,
-  y: pos.y - rect.top,
+  x: pos.x - rect.left + rect.invisibleLeft,
+  y: pos.y - rect.top + rect.invisibleTop,
 });
 
 const createAtom = (initialVal = null) => {

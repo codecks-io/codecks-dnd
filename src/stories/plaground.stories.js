@@ -13,7 +13,7 @@ const DropArea = ({width = 200}) => {
   const {isOver, ref} = useDropZone({
     type: "box",
     onDrop: (data) => console.log("drop!", data),
-    // onDragOver: (data) => console.log("drag", data),
+    onDragOver: (data) => console.log("dragY", data.position?.y),
   });
 
   return <div style={{width, height: 100, background: isOver ? "blue" : "red"}} ref={ref} />;
@@ -104,7 +104,7 @@ export const ScrollmaniaWithOverlay = () => (
       style={{height: 300, overflow: "auto", background: "cyan", padding: 20, marginTop: 30}}
       id="overflowParent"
     >
-      <div style={{marginTop: -60}} />
+      {/* <div style={{marginTop: -60}} /> */}
       <DropArea width={50} />
       {Array.from(new Array(30)).map((_, i) => (
         <div key={i}>Text</div>
