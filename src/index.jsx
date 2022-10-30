@@ -193,8 +193,8 @@ const getScrollInfo = (node) => {
 };
 
 const ScrollListener = ({node, id}) => {
-  const setNode = useScrollContainerStore((s) => s.setNode);
   useLayoutEffect(() => {
+    const {setNode} = useScrollContainerStore.getState();
     const setRect = (rect) => {
       if (rect) {
         const scrollRectHeight = Math.min(
@@ -231,7 +231,7 @@ const ScrollListener = ({node, id}) => {
       unsubFn();
       node.removeEventListener("scroll", updateScroll, getPassiveArg());
     };
-  }, [node, setNode, id]);
+  }, [node, id]);
   return null;
 };
 
@@ -322,11 +322,10 @@ const ScrollListeners = () => {
 };
 
 const DragElement = ({rect, children}) => {
-  const setDragInfo = useDragStore((s) => s.setDragInfo);
-  const set = useDragStore((s) => s.set);
   const nodeRef = useRef();
 
   useEffect(() => {
+    const {setDragInfo, set} = useDragStore.getState();
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
       setDragInfo((prev) => ({
@@ -357,7 +356,7 @@ const DragElement = ({rect, children}) => {
       document.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [set, setDragInfo]);
+  }, []);
 
   useEffect(() => {
     return useDragStore.subscribe(
@@ -423,7 +422,7 @@ export const DragController = ({
   layerKey,
   children,
 }) => {
-  const set = useDragStore((s) => s.set);
+  // const set = useDragStore((s) => s.set);
   const dragItem = useDragStore((s) =>
     s.item && s.item.type === type && s.item.layerKey === (layerKey || null) ? s.item : null
   );
@@ -442,9 +441,9 @@ export const DragController = ({
 
   useEffect(() => {
     if (cancelDragOnUnmount && dragItemRect) {
-      return () => set({item: null, dragInfo: null});
+      return () => useDragStore.getState().set({item: null, dragInfo: null});
     }
-  }, [cancelDragOnUnmount, set, dragItemRect]);
+  }, [cancelDragOnUnmount, dragItemRect]);
 
   const ctxVal = useMemo(
     () => ({
@@ -459,12 +458,12 @@ export const DragController = ({
           currentPos: addPos(currentPos, mouseOffset),
           dimensions: {width: nodeRect.width, height: nodeRect.height},
         };
-        set({item, dragInfo});
+        useDragStore.getState().set({item, dragInfo});
       },
       renderPlaceholder:
         renderPlaceholderRef.current || (({ref}) => <DefaultPlaceholder ref={ref} />),
     }),
-    [set]
+    []
   );
   const baseComp = (
     <>
@@ -637,7 +636,7 @@ const getRectListener = (node, setRect) => {
   }
 
   window.addEventListener("resize", update);
-  unsubs.push(() => window.removeEventListener("resive", update));
+  unsubs.push(() => window.removeEventListener("resize", update));
 
   update();
 
@@ -678,20 +677,20 @@ const createAtom = (initialVal = null) => {
 
 // Updating the rect shouldn't cause a re-render of the drop zone and all its children.
 // So `setState` is not an option
-const useRect = ({dragItem, disabled, nodeRef}) => {
+const useRect = ({dragItem, disabled, node}) => {
   const [rectAtom] = useState(createAtom);
 
-  const registerScrollContainer = useDragStore((s) => s.registerScrollContainer);
   useLayoutEffect(() => {
-    if (!disabled && dragItem && nodeRef.current) {
-      const {unsubFn, scrollParents} = getRectListener(nodeRef.current, rectAtom.set);
+    if (!disabled && dragItem && node) {
+      const {unsubFn, scrollParents} = getRectListener(node, rectAtom.set);
+      const {registerScrollContainer} = useDragStore.getState();
       const unsubScrollContainers = registerScrollContainer(scrollParents);
       return () => {
         unsubFn();
         unsubScrollContainers();
       };
     }
-  }, [dragItem, registerScrollContainer, disabled, nodeRef, rectAtom]);
+  }, [dragItem, disabled, node, rectAtom]);
 
   return {getRect: rectAtom.get, rectSubscribe: rectAtom.subscribe};
 };
@@ -703,8 +702,7 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
   const [isOver, setOver] = useState(false);
   const lastSentDragPosRef = useRef(null);
 
-  const {getRect, rectSubscribe} = useRect({dragItem, disabled, nodeRef});
-  const addDropFn = useDragStore((s) => s.addDropFn);
+  const {getRect, rectSubscribe} = useRect({dragItem, disabled, node: nodeRef.current});
 
   const onDropRef = useRef(onDrop);
   useEffect(() => {
@@ -761,13 +759,14 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
   // register onDrop handler if isOver is true
   useEffect(() => {
     if (isOver) {
+      const {addDropFn} = useDragStore.getState();
       return addDropFn(({item}) => {
         const {dragInfo} = useDragStore.getState();
         const position = getRelPosition(getRect(), dragInfo.currentPos);
         onDropRef.current && onDropRef.current({item, position});
       });
     }
-  }, [isOver, addDropFn, getRect]);
+  }, [isOver, getRect]);
 
   return {ref: nodeRef, dragItem, isOver};
 };
