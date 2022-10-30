@@ -46,7 +46,7 @@ const useStyle = (rules) => {
 const useDragStore = create(
   subscribeWithSelector((set) => ({
     item: null, // {type, id, data}
-    dragInfo: null, // {startPos, currentPos, mouseOffset}
+    dragInfo: null, // {startPos, currentPos, mouseOffset, isTouch}
     dropFns: [],
     scrollNodes: [],
     scrollNodeCountMap: new Map(),
@@ -324,36 +324,60 @@ const ScrollListeners = () => {
 const DragElement = ({rect, children}) => {
   const nodeRef = useRef();
 
-  useEffect(() => {
-    const {setDragInfo, set} = useDragStore.getState();
+  useLayoutEffect(() => {
+    const {setDragInfo, set, dragInfo} = useDragStore.getState();
+    const {isTouch} = dragInfo;
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
       setDragInfo((prev) => ({
         dragInfo: prev && {
-          startPos: prev.startPos,
-          mouseOffset: prev.mouseOffset,
+          ...prev,
           currentPos: addPos(point, prev.mouseOffset),
-          dimensions: prev.dimensions,
         },
       }));
     };
-    const onMouseUp = () => {
+    const onTouchMove = (e) => {
+      const t = e.touches[0];
+      const point = {x: t.clientX, y: t.clientY};
+      setDragInfo((prev) => ({
+        dragInfo: prev && {
+          ...prev,
+          currentPos: addPos(point, prev.mouseOffset),
+        },
+      }));
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const onMouseUp = (e) => {
       const {dropFns, item} = useDragStore.getState();
       dropFns.some((fn) => fn({item}) !== false);
       set({item: null, dragInfo: null});
+      if (e.cancelable) e.preventDefault();
     };
 
     const onKeyDown = () => {
       set({item: null, dragInfo: null});
     };
 
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    if (isTouch) {
+      window.addEventListener("touchmove", onTouchMove, {passive: false, capture: true});
+      document.addEventListener("touchend", onMouseUp);
+      document.addEventListener("touchcancel", onMouseUp);
+    } else {
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    }
     document.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      if (isTouch) {
+        window.removeEventListener("touchmove", onTouchMove, {passive: false, capture: true});
+        document.removeEventListener("touchend", onMouseUp);
+        document.removeEventListener("touchcancel", onMouseUp);
+      } else {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      }
       document.removeEventListener("keydown", onKeyDown);
     };
   }, []);
@@ -391,6 +415,7 @@ const DragElement = ({rect, children}) => {
           zIndex: 5000,
           boxSizing: "border-box",
           pointerEvents: "none",
+          touchAction: "none",
         }}
       >
         {children}
@@ -447,7 +472,7 @@ export const DragController = ({
 
   const ctxVal = useMemo(
     () => ({
-      onItemDragStart: ({item, nodeRect, dragInfo: {startPos, currentPos}}) => {
+      onItemDragStart: ({item, nodeRect, dragInfo: {startPos, currentPos, isTouch}}) => {
         setDragItemRect(nodeRect);
         const centerX = nodeRect.left + nodeRect.width / 2;
         const centerY = nodeRect.top + nodeRect.height / 2;
@@ -457,6 +482,7 @@ export const DragController = ({
           startPos: addPos(startPos, mouseOffset),
           currentPos: addPos(currentPos, mouseOffset),
           dimensions: {width: nodeRect.width, height: nodeRect.height},
+          isTouch,
         };
         useDragStore.getState().set({item, dragInfo});
       },
@@ -524,47 +550,110 @@ export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) =>
   }, [dragState, id, onItemDragStart, type, layerKey]);
 
   const handlers = useMemo(() => {
-    if (dragState.state === "idle") {
-      if (disabled) return {};
-      return {
-        onMouseDown: (e) => {
-          if (e.defaultPrevented) return;
-          if (e.button !== primaryButton) return;
-          if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-          e.preventDefault();
-          setDragState({state: "pending", data: {startPos: {x: e.clientX, y: e.clientY}}});
-        },
-      };
-    } else if (dragState.state === "pending") {
-      const cancel = () => {
-        setDragState(idleState);
-      };
-      if (disabled) {
-        cancel();
-        return {};
-      }
-      return {
-        onMouseMove: (e) => {
-          if (e.button !== primaryButton) return;
-          const point = {x: e.clientX, y: e.clientY};
-          if (isSloppyClickThresholdExceeded(dragState.data.startPos, point)) {
+    switch (dragState.state) {
+      case "idle": {
+        if (disabled) return {};
+        return {
+          onMouseDown: (e) => {
+            if (e.defaultPrevented) return;
+            if (e.button !== primaryButton) return;
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
             e.preventDefault();
+            setDragState({state: "pending", data: {startPos: {x: e.clientX, y: e.clientY}}});
+          },
+          onTouchStart: (e) => {
+            if (e.defaultPrevented) return;
+            const t = e.touches[0];
+            const pos = {x: t.clientX, y: t.clientY};
+            let timeoutId = setTimeout(() => {
+              setDragState({
+                state: "started",
+                data: {startPos: pos, currentPos: pos, isTouch: true},
+              });
+              if (navigator.vibrate) {
+                try {
+                  navigator.vibrate(50);
+                } catch {}
+              }
+            }, 100);
             setDragState({
-              state: "started",
-              data: {startPos: dragState.data.startPos, currentPos: point},
+              state: "pendingTouch",
+              data: {startPos: pos, timeoutId},
             });
-          }
-        },
-        onMouseUp: cancel,
-        onMouseDown: cancel,
-      };
+          },
+        };
+      }
+      case "pending": {
+        const cancel = () => {
+          setDragState(idleState);
+        };
+        if (disabled) {
+          cancel();
+          return {};
+        }
+        return {
+          onMouseMove: (e) => {
+            if (e.button !== primaryButton) return;
+            const point = {x: e.clientX, y: e.clientY};
+            if (isSloppyClickThresholdExceeded(dragState.data.startPos, point)) {
+              e.preventDefault();
+              setDragState({
+                state: "started",
+                data: {startPos: dragState.data.startPos, currentPos: point, isTouch: false},
+              });
+            }
+          },
+          onMouseUp: cancel,
+          onMouseDown: cancel,
+        };
+      }
+      case "pendingTouch": {
+        const cancel = () => {
+          setDragState(idleState);
+          clearTimeout(dragState.data.timeoutId);
+        };
+        return {
+          onTouchMove: (e) => {
+            const t = e.touches[0];
+            const point = {x: t.clientX, y: t.clientY};
+            if (isSloppyClickThresholdExceeded(dragState.data.startPos, point)) {
+              cancel();
+            } else {
+              e.preventDefault();
+            }
+          },
+          onTouchStart: cancel,
+          onTouchEnd: cancel,
+          onTouchCancel: cancel,
+        };
+      }
+      default:
+        return {};
     }
   }, [dragState, disabled]);
-  if (isDraggingMe) {
-    return renderPlaceholder({item: isDraggingMe, ref: passedRef});
-  } else {
-    return children({handlers, ref: passedRef});
-  }
+
+  // child needs to stay present, even if placeholder is shown, to ensure that touch events
+  // continue to be processed
+
+  // still not perfect, same issue is dicussed here:
+  // - https://github.com/atlassian/react-beautiful-dnd/issues/2111
+  // - https://github.com/atlassian/react-beautiful-dnd/compare/v12.0.0-beta.10...v12.0.0-beta.11
+
+  return (
+    <>
+      {children({
+        handlers: {
+          ...handlers,
+          style: {
+            userSelect: "none",
+            ...(isDraggingMe ? {display: "none"} : null),
+          },
+        },
+        ref: passedRef,
+      })}
+      {isDraggingMe && renderPlaceholder({item: isDraggingMe})}
+    </>
+  );
 };
 
 const getScrollParents = (node) => {

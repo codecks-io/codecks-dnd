@@ -1,4 +1,7 @@
 {
   "extends": "react-app",
-  "rules": {"no-shadow": "warn"}
+  "rules": {
+    "no-shadow": "warn",
+    "no-console": "warn"
+  }
 }
