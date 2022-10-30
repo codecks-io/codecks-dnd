@@ -9,46 +9,43 @@
     "react",
     "drag and drop"
   ],
-  "main": "dist/cjs/index.js",
-  "module": "dist/es/index.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": "./dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "sideEffects": false,
   "repository": "https://github.com/codecks_io/codecks-dnd",
   "author": "Daniel Berndt <daniel.berndt@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "build": "db-scripts-bundle --size-snapshot",
-    "lint": "eslint --max-warnings=0 src *.js",
-    "format": "prettier --write '{src,docs}/**/*.{js,css}' '*.js'",
-    "setup": "npm install && npm run validate -s",
-    "prepack": "npm run build",
-    "prepublish-later": "npm run lint",
+    "build": "node build.js",
+    "lint": "eslint --max-warnings=0 'src/**/*.{js,jsx}'",
+    "is-prettier": "prettier --list-different 'src/**/*.{js,jsx}'",
+    "prepublishOnly": "npm run lint && npm run is-prettier && npm run build",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook"
   },
   "devDependencies": {
-    "@babel/core": "^7.7.5",
-    "@db-scripts/bundle": "^0.4.1",
-    "@db-scripts/eslint-config": "^0.3.0",
-    "@storybook/addon-actions": "^6.0.21",
-    "@storybook/addon-essentials": "^6.0.21",
-    "@storybook/addon-links": "^6.0.21",
-    "@storybook/react": "^6.0.21",
-    "babel-loader": "^8.0.6",
-    "eslint": "^7.9.0",
-    "react": "^16.12.0",
-    "react-dom": "^16.12.0"
+    "@storybook/addon-actions": "^6.5.13",
+    "@storybook/addon-essentials": "^6.5.13",
+    "@storybook/addon-links": "^6.5.13",
+    "@storybook/react": "^6.5.13",
+    "esbuild": "^0.15.12",
+    "eslint": "^8.26.0",
+    "eslint-config-react-app": "^7.0.1",
+    "prettier": "^2.7.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
     "react-dom": ">=16.8.0"
   },
   "dependencies": {
-    "@babel/runtime": "^7.7.6",
-    "react-merge-refs": "^1.1.0",
-    "resize-observer-polyfill": "^1.5.1",
-    "zustand": "^3.1.2"
+    "react-merge-refs": "^2.0.0",
+    "zustand": "^4.0.0"
   }
 }

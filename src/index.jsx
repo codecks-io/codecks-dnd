@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import {createPortal} from "react-dom";
 import create from "zustand";
-import ResizeObserver from "resize-observer-polyfill";
+import {subscribeWithSelector} from "zustand/middleware";
 import mergeRefs from "react-merge-refs";
 
 const Portal = ({children}) => {
@@ -43,49 +43,28 @@ const useStyle = (rules) => {
   });
 };
 
-const useDragStore = create((set) => ({
-  item: null, // {type, id, data}
-  dragInfo: null, // {startPos, currentPos, mouseOffset}
-  dropFns: [],
-  scrollNodes: [],
-  scrollNodeCountMap: new Map(),
-  addDropFn: (fn) => {
-    set((prev) => ({dropFns: [fn, ...prev.dropFns]}));
-    return () => set((prev) => ({dropFns: prev.dropFns.filter((f) => f !== fn)}));
-  },
-  registerScrollContainer: (nodes) => {
-    set((prev) => {
-      let listModified = false;
-      const nextMap = new Map(prev.scrollNodeCountMap);
-      nodes.forEach((node) => {
-        const count = nextMap.get(node);
-        if (count) {
-          nextMap.set(node, count + 1);
-        } else {
-          listModified = true;
-          nextMap.set(node, 1);
-        }
-      });
-      if (listModified) {
-        return {
-          scrollNodeCountMap: nextMap,
-          scrollNodes: Array.from(nextMap.keys()).reverse(),
-        };
-      } else {
-        return {scrollNodeCountMap: nextMap};
-      }
-    });
-    return () =>
+const useDragStore = create(
+  subscribeWithSelector((set) => ({
+    item: null, // {type, id, data}
+    dragInfo: null, // {startPos, currentPos, mouseOffset}
+    dropFns: [],
+    scrollNodes: [],
+    scrollNodeCountMap: new Map(),
+    addDropFn: (fn) => {
+      set((prev) => ({dropFns: [fn, ...prev.dropFns]}));
+      return () => set((prev) => ({dropFns: prev.dropFns.filter((f) => f !== fn)}));
+    },
+    registerScrollContainer: (nodes) => {
       set((prev) => {
         let listModified = false;
         const nextMap = new Map(prev.scrollNodeCountMap);
         nodes.forEach((node) => {
           const count = nextMap.get(node);
-          if (count === 1) {
-            nextMap.delete(node);
-            listModified = true;
+          if (count) {
+            nextMap.set(node, count + 1);
           } else {
-            nextMap.set(node, count - 1);
+            listModified = true;
+            nextMap.set(node, 1);
           }
         });
         if (listModified) {
@@ -97,11 +76,34 @@ const useDragStore = create((set) => ({
           return {scrollNodeCountMap: nextMap};
         }
       });
-  },
-  set: ({item, dragInfo}) => set({item, dragInfo}),
-  setItem: (item) => set({item}),
-  setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
-}));
+      return () =>
+        set((prev) => {
+          let listModified = false;
+          const nextMap = new Map(prev.scrollNodeCountMap);
+          nodes.forEach((node) => {
+            const count = nextMap.get(node);
+            if (count === 1) {
+              nextMap.delete(node);
+              listModified = true;
+            } else {
+              nextMap.set(node, count - 1);
+            }
+          });
+          if (listModified) {
+            return {
+              scrollNodeCountMap: nextMap,
+              scrollNodes: Array.from(nextMap.keys()).reverse(),
+            };
+          } else {
+            return {scrollNodeCountMap: nextMap};
+          }
+        });
+    },
+    set: ({item, dragInfo}) => set({item, dragInfo}),
+    setItem: (item) => set({item}),
+    setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
+  }))
+);
 
 const primaryButton = 0;
 const sloppyClickThreshold = 5;
@@ -143,36 +145,38 @@ const getPassiveArg = () => {
   return passiveArg;
 };
 
-const useScrollContainerStore = create((set) => ({
-  nodes: new Map(), // {[id]: {node, canScrollUp, canScrollDown, topRect, bottomRect}}
-  activeScrollNode: null, // {id, node, intensity}
-  setActiveScrollNode: (next) =>
-    set(({activeScrollNode: prev}) => {
-      if (next === null || prev === null) return {activeScrollNode: next};
-      if (next.id === prev.id && prev.intensity === next.intensity) {
-        return {activeScrollNode: prev};
-      } else {
-        return {activeScrollNode: next};
-      }
-    }),
-  setNode: (id, info) =>
-    set(({nodes, activeScrollNode}) => {
-      const nextNodes = new Map(nodes);
-      if (info === null) {
-        nextNodes.delete(id);
-        if (id === (activeScrollNode && activeScrollNode.id)) {
-          return {nodes: nextNodes, activeScrollNode: null};
-        }
-      } else {
-        if (typeof info === "function") {
-          nextNodes.set(id, info(nodes.get(id)));
+const useScrollContainerStore = create(
+  subscribeWithSelector((set) => ({
+    nodes: new Map(), // {[id]: {node, canScrollUp, canScrollDown, topRect, bottomRect}}
+    activeScrollNode: null, // {id, node, intensity}
+    setActiveScrollNode: (next) =>
+      set(({activeScrollNode: prev}) => {
+        if (next === null || prev === null) return {activeScrollNode: next};
+        if (next.id === prev.id && prev.intensity === next.intensity) {
+          return {activeScrollNode: prev};
         } else {
-          nextNodes.set(id, info);
+          return {activeScrollNode: next};
         }
-      }
-      return {nodes: nextNodes};
-    }),
-}));
+      }),
+    setNode: (id, info) =>
+      set(({nodes, activeScrollNode}) => {
+        const nextNodes = new Map(nodes);
+        if (info === null) {
+          nextNodes.delete(id);
+          if (id === (activeScrollNode && activeScrollNode.id)) {
+            return {nodes: nextNodes, activeScrollNode: null};
+          }
+        } else {
+          if (typeof info === "function") {
+            nextNodes.set(id, info(nodes.get(id)));
+          } else {
+            nextNodes.set(id, info);
+          }
+        }
+        return {nodes: nextNodes};
+      }),
+  }))
+);
 
 const getScrollInfo = (node) => {
   if (node === window) {
@@ -290,6 +294,7 @@ const ScrollListeners = () => {
 
   useEffect(() => {
     const unsubDragInfo = useDragStore.subscribe(
+      (state) => state.dragInfo,
       (dragInfo) => {
         if (dragInfo) {
           updateActiveScrollNode(
@@ -297,17 +302,16 @@ const ScrollListeners = () => {
             useScrollContainerStore.getState().nodes
           );
         }
-      },
-      (state) => state.dragInfo
+      }
     );
     const unsubScrollInfo = useScrollContainerStore.subscribe(
+      (state) => state.nodes,
       (nodes) => {
         const {dragInfo} = useDragStore.getState();
         if (dragInfo) {
           updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), nodes);
         }
-      },
-      (state) => state.nodes
+      }
     );
     return () => {
       unsubDragInfo();
@@ -357,6 +361,7 @@ const DragElement = ({rect, children}) => {
 
   useEffect(() => {
     return useDragStore.subscribe(
+      (state) => state.dragInfo,
       (dragInfo) => {
         if (dragInfo) {
           if (nodeRef.current) {
@@ -365,8 +370,7 @@ const DragElement = ({rect, children}) => {
             nodeRef.current.style.transform = `translate(${x}px, ${y}px)`;
           }
         }
-      },
-      (state) => state.dragInfo
+      }
     );
   }, []);
 
@@ -738,8 +742,8 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
         }
       };
       const unsub1 = useDragStore.subscribe(
-        (currentPos) => check(currentPos, getRect()),
-        (state) => state.dragInfo && state.dragInfo.currentPos
+        (state) => state.dragInfo && state.dragInfo.currentPos,
+        (currentPos) => check(currentPos, getRect())
       );
       const unsub2 = rectSubscribe((rect) => {
         const {dragInfo} = useDragStore.getState();

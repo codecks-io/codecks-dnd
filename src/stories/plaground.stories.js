@@ -114,6 +114,7 @@ export const ScrollmaniaWithOverlay = () => (
   </div>
 );
 
+// eslint-disable-next-line import/no-anonymous-default-export
 export default {
   title: "Plaground",
   component: Playground,

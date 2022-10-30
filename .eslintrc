@@ -1,1 +1,3 @@
-{"extends": "@db-scripts/eslint-config/strict"}
+{
+  "extends": "react-app"
+}
