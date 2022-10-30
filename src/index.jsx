@@ -11,7 +11,7 @@ import React, {
 import {createPortal} from "react-dom";
 import create from "zustand";
 import {subscribeWithSelector} from "zustand/middleware";
-import mergeRefs from "react-merge-refs";
+import {mergeRefs} from "react-merge-refs";
 
 const Portal = ({children}) => {
   const [node] = useState(() => document.createElement("div"));
