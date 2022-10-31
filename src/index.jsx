@@ -415,7 +415,6 @@ const DragElement = ({rect, children}) => {
           zIndex: 5000,
           boxSizing: "border-box",
           pointerEvents: "none",
-          touchAction: "none",
         }}
       >
         {children}
@@ -561,26 +560,26 @@ export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) =>
             e.preventDefault();
             setDragState({state: "pending", data: {startPos: {x: e.clientX, y: e.clientY}}});
           },
-          onTouchStart: (e) => {
-            if (e.defaultPrevented) return;
-            const t = e.touches[0];
-            const pos = {x: t.clientX, y: t.clientY};
-            let timeoutId = setTimeout(() => {
-              setDragState({
-                state: "started",
-                data: {startPos: pos, currentPos: pos, isTouch: true},
-              });
-              if (navigator.vibrate) {
-                try {
-                  navigator.vibrate(50);
-                } catch {}
-              }
-            }, 100);
-            setDragState({
-              state: "pendingTouch",
-              data: {startPos: pos, timeoutId},
-            });
-          },
+          // onTouchStart: (e) => {
+          //   if (e.defaultPrevented) return;
+          //   const t = e.touches[0];
+          //   const pos = {x: t.clientX, y: t.clientY};
+          //   let timeoutId = setTimeout(() => {
+          //     setDragState({
+          //       state: "started",
+          //       data: {startPos: pos, currentPos: pos, isTouch: true},
+          //     });
+          //     if (navigator.vibrate) {
+          //       try {
+          //         navigator.vibrate(50);
+          //       } catch {}
+          //     }
+          //   }, 100);
+          //   setDragState({
+          //     state: "pendingTouch",
+          //     data: {startPos: pos, timeoutId},
+          //   });
+          // },
         };
       }
       case "pending": {
@@ -607,26 +606,26 @@ export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) =>
           onMouseDown: cancel,
         };
       }
-      case "pendingTouch": {
-        const cancel = () => {
-          setDragState(idleState);
-          clearTimeout(dragState.data.timeoutId);
-        };
-        return {
-          onTouchMove: (e) => {
-            const t = e.touches[0];
-            const point = {x: t.clientX, y: t.clientY};
-            if (isSloppyClickThresholdExceeded(dragState.data.startPos, point)) {
-              cancel();
-            } else {
-              e.preventDefault();
-            }
-          },
-          onTouchStart: cancel,
-          onTouchEnd: cancel,
-          onTouchCancel: cancel,
-        };
-      }
+      // case "pendingTouch": {
+      //   const cancel = () => {
+      //     setDragState(idleState);
+      //     clearTimeout(dragState.data.timeoutId);
+      //   };
+      //   return {
+      //     onTouchMove: (e) => {
+      //       const t = e.touches[0];
+      //       const point = {x: t.clientX, y: t.clientY};
+      //       if (isSloppyClickThresholdExceeded(dragState.data.startPos, point)) {
+      //         cancel();
+      //       } else {
+      //         e.preventDefault();
+      //       }
+      //     },
+      //     onTouchStart: cancel,
+      //     onTouchEnd: cancel,
+      //     onTouchCancel: cancel,
+      //   };
+      // }
       default:
         return {};
     }
@@ -634,26 +633,15 @@ export const Draggable = ({type, id, itemData, children, disabled, mergeRef}) =>
 
   // child needs to stay present, even if placeholder is shown, to ensure that touch events
   // continue to be processed
+  // rendering two children leads to other breaking changes. thus it's being reverted.
 
   // still not perfect, same issue is dicussed here:
   // - https://github.com/atlassian/react-beautiful-dnd/issues/2111
   // - https://github.com/atlassian/react-beautiful-dnd/compare/v12.0.0-beta.10...v12.0.0-beta.11
 
-  return (
-    <>
-      {children({
-        handlers: {
-          ...handlers,
-          style: {
-            userSelect: "none",
-            ...(isDraggingMe ? {display: "none"} : null),
-          },
-        },
-        ref: passedRef,
-      })}
-      {isDraggingMe && renderPlaceholder({item: isDraggingMe})}
-    </>
-  );
+  return isDraggingMe
+    ? renderPlaceholder({item: isDraggingMe, ref: passedRef})
+    : children({handlers, ref: passedRef});
 };
 
 const getScrollParents = (node) => {
