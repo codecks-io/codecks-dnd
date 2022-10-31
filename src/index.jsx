@@ -773,13 +773,13 @@ const useRect = ({dragItem, disabled, node}) => {
 };
 
 export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
-  const nodeRef = useRef();
+  const [node, setNode] = useState(null);
   const dragItem = useDragItem(type);
 
   const [isOver, setOver] = useState(false);
   const lastSentDragPosRef = useRef(null);
 
-  const {getRect, rectSubscribe} = useRect({dragItem, disabled, node: nodeRef.current});
+  const {getRect, rectSubscribe} = useRect({dragItem, disabled, node});
 
   const onDropRef = useRef(onDrop);
   useEffect(() => {
@@ -845,5 +845,5 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
     }
   }, [isOver, getRect]);
 
-  return {ref: nodeRef, dragItem, isOver};
+  return {ref: setNode, dragItem, isOver};
 };
