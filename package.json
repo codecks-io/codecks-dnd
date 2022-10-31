@@ -21,7 +21,7 @@
   "author": "Daniel Berndt <daniel.berndt@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "build": "node build.js",
+    "build": "rm -rf dist && node build.js",
     "lint": "eslint --max-warnings=0 'src/**/*.{js,jsx}'",
     "is-prettier": "prettier --list-different 'src/**/*.{js,jsx}'",
     "prepublishOnly": "npm run lint && npm run is-prettier && npm run build",
