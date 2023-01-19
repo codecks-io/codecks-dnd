@@ -43,7 +43,7 @@ const useStyle = (rules) => {
   });
 };
 
-const useDragStore = create(
+export const useDragStore = create(
   subscribeWithSelector((set) => ({
     item: null, // {type, id, data}
     dragInfo: null, // {startPos, currentPos, mouseOffset, isTouch}
