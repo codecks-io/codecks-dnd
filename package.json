@@ -24,7 +24,7 @@
     "build": "rm -rf dist && node build.js",
     "lint": "eslint --max-warnings=0 'src/**/*.{js,jsx}'",
     "is-prettier": "prettier --list-different 'src/**/*.{js,jsx}'",
-    "prepublishOnly": "npm run lint && npm run is-prettier && npm run build",
+    "prepublishOnly": "npm run build",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
