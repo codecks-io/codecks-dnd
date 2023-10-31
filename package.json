@@ -25,20 +25,24 @@
     "lint": "eslint --max-warnings=0 'src/**/*.{js,jsx}'",
     "is-prettier": "prettier --list-different 'src/**/*.{js,jsx}'",
     "prepublishOnly": "npm run lint && npm run is-prettier && npm run build",
-    "storybook": "start-storybook -p 6006",
-    "build-storybook": "build-storybook"
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "devDependencies": {
-    "@storybook/addon-actions": "^6.5.13",
-    "@storybook/addon-essentials": "^6.5.13",
-    "@storybook/addon-links": "^6.5.13",
-    "@storybook/react": "^6.5.13",
-    "esbuild": "^0.15.12",
-    "eslint": "^8.26.0",
+    "@babel/preset-env": "^7.23.2",
+    "@babel/preset-react": "^7.22.15",
+    "@storybook/addon-actions": "^7.6.0-alpha.3",
+    "@storybook/addon-essentials": "^7.6.0-alpha.3",
+    "@storybook/addon-links": "^7.6.0-alpha.3",
+    "@storybook/react": "^7.6.0-alpha.3",
+    "@storybook/react-webpack5": "^7.6.0-alpha.3",
+    "esbuild": "^0.19.5",
+    "eslint": "^8.52.0",
     "eslint-config-react-app": "^7.0.1",
-    "prettier": "^2.7.1",
+    "prettier": "^3.0.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "storybook": "^7.6.0-alpha.3"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
