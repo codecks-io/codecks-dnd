@@ -88,6 +88,34 @@ export const Scrollmania = () => (
   </div>
 );
 
+export const NestedScrollmania = () => (
+  <div style={{display: "flex", height: "120vh"}}>
+    <div>
+      <DragController type="box" renderItem={({id}) => <Box id={id} />}>
+        <div style={{display: "flex"}}>
+          {boxes.map((id) => (
+            <Draggable type="box" id={id} key={id}>
+              {({handlers, ref}) => <Box {...handlers} ref={ref} id={id} />}
+            </Draggable>
+          ))}
+        </div>
+      </DragController>
+      <DropArea />
+    </div>
+    <div style={{height: 200, overflow: "auto", background: "yellow", padding: 20}}>
+      <div style={{height: 300, overflow: "auto", background: "cyan", padding: 20}}>
+        <div>Text</div>
+        <DropArea width={50} />
+        {Array.from(new Array(30)).map((_, i) => (
+          <div key={i}>Text</div>
+        ))}
+        <DropArea width={50} />
+        <div>Text</div>
+      </div>
+      </div>
+  </div>
+);
+
 export const ScrollmaniaWithOverlay = () => (
   <div style={{display: "flex", height: "120vh", position: "relative"}}>
     <div>

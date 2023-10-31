@@ -9,7 +9,7 @@ import React, {
   useState,
 } from "react";
 import {createPortal} from "react-dom";
-import create from "zustand";
+import {create} from "zustand";
 import {subscribeWithSelector} from "zustand/middleware";
 import {mergeRefs} from "react-merge-refs";
 
@@ -145,9 +145,16 @@ const getPassiveArg = () => {
   return passiveArg;
 };
 
+const getRevNodes = (nodes) => {
+  const vals = [...nodes.values()];
+  vals.reverse();
+  return vals;
+};
+
 const useScrollContainerStore = create(
   subscribeWithSelector((set) => ({
     nodes: new Map(), // {[id]: {node, canScrollUp, canScrollDown, topRect, bottomRect}}
+    reverseNodes: [],
     activeScrollNode: null, // {id, node, intensity}
     setActiveScrollNode: (next) =>
       set(({activeScrollNode: prev}) => {
@@ -164,16 +171,13 @@ const useScrollContainerStore = create(
         if (info === null) {
           nextNodes.delete(id);
           if (id === (activeScrollNode && activeScrollNode.id)) {
-            return {nodes: nextNodes, activeScrollNode: null};
+            return {nodes: nextNodes, activeScrollNode: null, reverseNodes: getRevNodes(nextNodes)};
           }
         } else {
-          if (typeof info === "function") {
-            nextNodes.set(id, info(nodes.get(id)));
-          } else {
-            nextNodes.set(id, info);
-          }
+          const nextVal = typeof info === "function" ? info(nodes.get(id)) : info;
+          nextNodes.set(id, nextVal);
         }
-        return {nodes: nextNodes};
+        return {nodes: nextNodes, reverseNodes: getRevNodes(nextNodes)};
       }),
   }))
 );
@@ -181,8 +185,8 @@ const useScrollContainerStore = create(
 const getScrollInfo = (node) => {
   if (node === window) {
     return {
-      canScrollUp: window.pageYOffset > 0,
-      canScrollDown: window.innerHeight + window.pageYOffset < document.body.scrollHeight,
+      canScrollUp: window.scrollY > 0,
+      canScrollDown: window.innerHeight + window.scrollY < document.body.scrollHeight,
     };
   } else {
     return {
@@ -237,7 +241,7 @@ const ScrollListener = ({node, id}) => {
 
 const updateActiveScrollNode = (mousePos, nodes) => {
   const {setActiveScrollNode} = useScrollContainerStore.getState();
-  for (const {id, node, canScrollUp, canScrollDown, topRect, bottomRect} of nodes.values()) {
+  for (const {id, node, canScrollUp, canScrollDown, topRect, bottomRect} of nodes) {
     if (isWithin(mousePos, topRect)) {
       if (canScrollUp) {
         const relDistanceToTop = (mousePos.y - topRect.top) / topRect.height;
@@ -279,7 +283,7 @@ const ScrollListeners = () => {
         momentumRef.current = intensity < 0 ? -nextSpeed : nextSpeed;
 
         if (node === window) {
-          window.scrollTo(0, window.pageYOffset + momentumRef.current);
+          window.scrollTo(0, window.scrollY + momentumRef.current);
         } else {
           node.scrollTop += momentumRef.current;
         }
@@ -299,17 +303,17 @@ const ScrollListeners = () => {
         if (dragInfo) {
           updateActiveScrollNode(
             subPos(dragInfo.currentPos, dragInfo.mouseOffset),
-            useScrollContainerStore.getState().nodes
+            useScrollContainerStore.getState().reverseNodes
           );
         }
       }
     );
     const unsubScrollInfo = useScrollContainerStore.subscribe(
-      (state) => state.nodes,
-      (nodes) => {
+      (state) => state.reverseNodes,
+      (reverseNodes) => {
         const {dragInfo} = useDragStore.getState();
         if (dragInfo) {
-          updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), nodes);
+          updateActiveScrollNode(subPos(dragInfo.currentPos, dragInfo.mouseOffset), reverseNodes);
         }
       }
     );
