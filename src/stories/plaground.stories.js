@@ -10,14 +10,20 @@ const Box = React.forwardRef(({id, style, ...rest}, ref) => (
 
 const boxes = [1, 3, 6];
 
-const DropArea = ({width = 200}) => {
+const DropArea = ({width = 200, style, ...rest}) => {
   const {isOver, ref} = useDropZone({
     type: "box",
-    onDrop: (data) => console.log("drop!", data),
-    onDragOver: (data) => console.log("dragY", data.position?.y),
+    onDrop: (data) => console.log("drop!", data, rest),
+    onDragOver: (data) => console.log("dragY", data.position?.y, rest),
   });
 
-  return <div style={{width, height: 100, background: isOver ? "blue" : "red"}} ref={ref} />;
+  return (
+    <div
+      style={{width, height: 100, background: isOver ? "blue" : "red", ...style}}
+      {...rest}
+      ref={ref}
+    />
+  );
 };
 
 export const Playground = () => (
@@ -34,6 +40,29 @@ export const Playground = () => (
     <DropArea />
     <div style={{height: 10}} />
     <DropArea />
+  </div>
+);
+
+export const DropBoxOverlap = () => (
+  <div>
+    <DragController type="box" renderItem={({id}) => <Box id={id} />}>
+      <div style={{display: "flex"}}>
+        {boxes.map((id) => (
+          <Draggable type="box" id={id} key={id}>
+            {({handlers, ref}) => <Box {...handlers} ref={ref} id={id} />}
+          </Draggable>
+        ))}
+      </div>
+    </DragController>
+    <DropArea id="drop-1" style={{position: "relative", zIndex: 1, boxShadow: "0 0 0 1px black"}} />
+    <DropArea
+      id="drop-2"
+      style={{position: "relative", top: -20, left: 20, boxShadow: "0 0 0 1px black"}}
+    />
+    <DropArea
+      id="drop-3"
+      style={{position: "relative", zIndex: 2, top: -260, left: 150, boxShadow: "0 0 0 1px black"}}
+    />
   </div>
 );
 
@@ -112,7 +141,7 @@ export const NestedScrollmania = () => (
         <DropArea width={50} />
         <div>Text</div>
       </div>
-      </div>
+    </div>
   </div>
 );
 

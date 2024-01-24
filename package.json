@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "react-merge-refs": "^2.0.0",
+    "stacking-order": "^2.0.0",
     "zustand": "^4.0.0"
   }
 }

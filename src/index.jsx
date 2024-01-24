@@ -12,6 +12,7 @@ import {createPortal} from "react-dom";
 import {create} from "zustand";
 import {subscribeWithSelector} from "zustand/middleware";
 import {mergeRefs} from "react-merge-refs";
+import {compare} from "stacking-order";
 
 const Portal = ({children}) => {
   const [node] = useState(() => document.createElement("div"));
@@ -43,17 +44,66 @@ const useStyle = (rules) => {
   });
 };
 
+export const getIndexViaBinarySearch = (list, el, cmpFn) => {
+  var m = 0;
+  var n = list.length - 1;
+  while (m <= n) {
+    var k = (n + m) >> 1;
+    var cmp = cmpFn(el, list[k]);
+    if (cmp > 0) {
+      m = k + 1;
+    } else if (cmp < 0) {
+      n = k - 1;
+    } else {
+      return k;
+    }
+  }
+  return m;
+};
+
+const createDropZoneManager = () => {
+  const dropZones = [];
+  const cmpFn = (dz1, dz2) => (dz1 === dz2 ? 0 : compare(dz2.node, dz1.node));
+  return {
+    addDropZone: (dropZone) => {
+      const targetIdx = getIndexViaBinarySearch(dropZones, dropZone, cmpFn);
+      dropZones.splice(targetIdx, 0, dropZone);
+      return () => {
+        const idx = dropZones.indexOf(dropZone);
+        dropZones.splice(idx, 1);
+      };
+    },
+    update: (currentPos, wasDropped, dragItem) => {
+      let found = currentPos === null;
+      for (const dropZone of dropZones) {
+        if (!found) {
+          const rect = dropZone.getRect();
+          if (rect && isWithin(currentPos, rect)) {
+            if (wasDropped) {
+              dropZone.setOver(false);
+              dropZone.onDrop(rect, currentPos, dragItem);
+            } else {
+              dropZone.setOver(true);
+              dropZone.onDragOver(rect, currentPos);
+            }
+            found = true;
+            continue;
+          }
+        }
+        dropZone.setOver(false);
+      }
+    },
+  };
+};
+
+const dropZoneManager = createDropZoneManager();
+
 export const useDragStore = create(
-  subscribeWithSelector((set) => ({
+  subscribeWithSelector((set, get) => ({
     item: null, // {type, id, data}
     dragInfo: null, // {startPos, currentPos, mouseOffset, isTouch}
-    dropFns: [],
     scrollNodes: [],
     scrollNodeCountMap: new Map(),
-    addDropFn: (fn) => {
-      set((prev) => ({dropFns: [fn, ...prev.dropFns]}));
-      return () => set((prev) => ({dropFns: prev.dropFns.filter((f) => f !== fn)}));
-    },
     registerScrollContainer: (nodes) => {
       set((prev) => {
         let listModified = false;
@@ -99,9 +149,14 @@ export const useDragStore = create(
           }
         });
     },
-    set: ({item, dragInfo}) => set({item, dragInfo}),
-    setItem: (item) => set({item}),
-    setDragInfo: (dragInfo) => set((prev) => dragInfo(prev.dragInfo)),
+    set: ({item, dragInfo}) => {
+      set({item, dragInfo});
+      dropZoneManager.update(dragInfo?.currentPos ?? null);
+    },
+    setDragInfo: (dragInfo) => {
+      set((prev) => dragInfo(prev.dragInfo));
+      dropZoneManager.update(get().dragInfo?.currentPos ?? null);
+    },
   }))
 );
 
@@ -113,7 +168,6 @@ const isSloppyClickThresholdExceeded = (original, current) =>
 
 const addPos = (p1, p2) => ({x: p1.x + p2.x, y: p1.y + p2.y});
 const subPos = (p1, p2) => ({x: p1.x - p2.x, y: p1.y - p2.y});
-const eqPos = (p1, p2) => p1.x === p2.x && p1.y === p2.y;
 const isWithin = (point, rect) =>
   point.x >= rect.left &&
   point.x <= rect.left + rect.width &&
@@ -145,7 +199,7 @@ const getPassiveArg = () => {
   return passiveArg;
 };
 
-const getRevNodes = (nodes) => {
+const getReversedNodes = (nodes) => {
   const vals = [...nodes.values()];
   vals.reverse();
   return vals;
@@ -171,13 +225,17 @@ const useScrollContainerStore = create(
         if (info === null) {
           nextNodes.delete(id);
           if (id === (activeScrollNode && activeScrollNode.id)) {
-            return {nodes: nextNodes, activeScrollNode: null, reverseNodes: getRevNodes(nextNodes)};
+            return {
+              nodes: nextNodes,
+              activeScrollNode: null,
+              reverseNodes: getReversedNodes(nextNodes),
+            };
           }
         } else {
           const nextVal = typeof info === "function" ? info(nodes.get(id)) : info;
           nextNodes.set(id, nextVal);
         }
-        return {nodes: nextNodes, reverseNodes: getRevNodes(nextNodes)};
+        return {nodes: nextNodes, reverseNodes: getReversedNodes(nextNodes)};
       }),
   }))
 );
@@ -329,8 +387,11 @@ const DragElement = ({rect, children}) => {
   const nodeRef = useRef();
 
   useLayoutEffect(() => {
-    const {setDragInfo, set, dragInfo} = useDragStore.getState();
-    const {isTouch} = dragInfo;
+    const {
+      setDragInfo,
+      set,
+      dragInfo: {isTouch},
+    } = useDragStore.getState();
     const onMouseMove = (e) => {
       const point = {x: e.clientX, y: e.clientY};
       setDragInfo((prev) => ({
@@ -353,9 +414,11 @@ const DragElement = ({rect, children}) => {
     };
 
     const onMouseUp = (e) => {
-      const {dropFns, item} = useDragStore.getState();
-      dropFns.some((fn) => fn({item}) !== false);
-      set({item: null, dragInfo: null});
+      const {dragInfo, item} = useDragStore.getState();
+      if (dragInfo) {
+        dropZoneManager.update(dragInfo.currentPos, true, item);
+        set({item: null, dragInfo: null});
+      }
       if (e.cancelable) e.preventDefault();
     };
 
@@ -785,69 +848,39 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
 
   const {getRect, rectSubscribe} = useRect({dragItem, disabled, node});
 
-  const onDropRef = useRef(onDrop);
+  const refs = useRef({onDrop, onDragOver});
   useEffect(() => {
-    onDropRef.current = onDrop;
-  }, [onDrop]);
+    refs.current = {onDrop, onDragOver};
+  });
 
-  const onDragOverRef = useRef(onDragOver);
   useEffect(() => {
-    onDragOverRef.current = onDragOver;
-  }, [onDragOver]);
-
-  // manage isOver and call onDragOver handler if dragPos or rect has changed
-  useEffect(() => {
-    const isntOver = () => {
-      setOver(false);
-      if (lastSentDragPosRef.current !== null) {
-        // call leave handler
-        if (onDragOverRef.current) onDragOverRef.current({item: dragItem, position: null});
-      }
-      lastSentDragPosRef.current = null;
-    };
-    if (!disabled && dragItem) {
-      const check = (currentPos, rect) => {
-        if (currentPos && rect && isWithin(currentPos, rect)) {
-          setOver(true);
-          if (!lastSentDragPosRef.current || !eqPos(lastSentDragPosRef.current, currentPos)) {
-            if (onDragOverRef.current) {
-              const position = getRelPosition(rect, currentPos);
-              onDragOverRef.current({item: dragItem, position});
-              lastSentDragPosRef.current = currentPos;
-            }
-          }
-        } else {
-          isntOver();
+    if (!node || disabled) return;
+    const unsubManag = dropZoneManager.addDropZone({
+      node,
+      getRect,
+      onDrop: (rect, currentPos, item) => {
+        if (!refs.current.onDrop) return;
+        const position = getRelPosition(rect, currentPos);
+        refs.current.onDrop({item, position});
+      },
+      setOver,
+      onDragOver: (rect, currentPos) => {
+        if (refs.current.onDragOver) {
+          const position = getRelPosition(rect, currentPos);
+          refs.current.onDragOver({item: useDragStore.getState().dragItem, position});
+          lastSentDragPosRef.current = currentPos;
         }
-      };
-      const unsub1 = useDragStore.subscribe(
-        (state) => state.dragInfo && state.dragInfo.currentPos,
-        (currentPos) => check(currentPos, getRect())
-      );
-      const unsub2 = rectSubscribe((rect) => {
-        const {dragInfo} = useDragStore.getState();
-        check(dragInfo && dragInfo.currentPos, rect);
-      });
-      return () => {
-        unsub1();
-        unsub2();
-      };
-    } else {
-      isntOver();
-    }
-  }, [disabled, dragItem, getRect, rectSubscribe]);
-
-  // register onDrop handler if isOver is true
-  useEffect(() => {
-    if (isOver) {
-      const {addDropFn} = useDragStore.getState();
-      return addDropFn(({item}) => {
-        const {dragInfo} = useDragStore.getState();
-        const position = getRelPosition(getRect(), dragInfo.currentPos);
-        onDropRef.current && onDropRef.current({item, position});
-      });
-    }
-  }, [isOver, getRect]);
+      },
+    });
+    const unsubRect = rectSubscribe(() => {
+      const {dragInfo} = useDragStore.getState();
+      if (dragInfo) dropZoneManager.update(dragInfo.currentPos);
+    });
+    return () => {
+      unsubManag();
+      unsubRect();
+    };
+  }, [node, getRect, disabled, rectSubscribe]);
 
   return {ref: setNode, dragItem, isOver};
 };
