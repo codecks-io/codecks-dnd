@@ -861,7 +861,7 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
         refs.current.onDrop({item, position});
       },
       setOver: (next) => {
-        if (refs.current.isOver && !next) {
+        if (refs.current.isOver && !next && refs.current.onDragOver) {
           refs.current.onDragOver({item: null, position: null});
         }
         setOver(next);
