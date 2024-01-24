@@ -867,7 +867,7 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
       onDragOver: (rect, currentPos) => {
         if (refs.current.onDragOver) {
           const position = getRelPosition(rect, currentPos);
-          refs.current.onDragOver({item: useDragStore.getState().dragItem, position});
+          refs.current.onDragOver({item: useDragStore.getState().item, position});
           lastSentDragPosRef.current = currentPos;
         }
       },

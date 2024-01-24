@@ -14,7 +14,7 @@ const DropArea = ({width = 200, style, ...rest}) => {
   const {isOver, ref} = useDropZone({
     type: "box",
     onDrop: (data) => console.log("drop!", data, rest),
-    onDragOver: (data) => console.log("dragY", data.position?.y, rest),
+    onDragOver: (data) => console.log("dragY", data.item, data.position?.y, rest),
   });
 
   return (
