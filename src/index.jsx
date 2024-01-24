@@ -80,11 +80,11 @@ const createDropZoneManager = () => {
           const rect = dropZone.getRect();
           if (rect && isWithin(currentPos, rect)) {
             if (wasDropped) {
-              dropZone.setOver(false);
               dropZone.onDrop(rect, currentPos, dragItem);
+              dropZone.setOver(false);
             } else {
-              dropZone.setOver(true);
               dropZone.onDragOver(rect, currentPos);
+              dropZone.setOver(true);
             }
             found = true;
             continue;
@@ -842,15 +842,12 @@ const useRect = ({dragItem, disabled, node}) => {
 export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
   const [node, setNode] = useState(null);
   const dragItem = useDragItem(type);
-
   const [isOver, setOver] = useState(false);
-  const lastSentDragPosRef = useRef(null);
-
   const {getRect, rectSubscribe} = useRect({dragItem, disabled, node});
 
-  const refs = useRef({onDrop, onDragOver});
+  const refs = useRef({onDrop, onDragOver, isOver});
   useEffect(() => {
-    refs.current = {onDrop, onDragOver};
+    refs.current = {onDrop, onDragOver, isOver};
   });
 
   useEffect(() => {
@@ -863,12 +860,19 @@ export const useDropZone = ({type, onDragOver, onDrop, disabled}) => {
         const position = getRelPosition(rect, currentPos);
         refs.current.onDrop({item, position});
       },
-      setOver,
+      setOver: (next) => {
+        if (refs.current.isOver && !next) {
+          refs.current.onDragOver({item: null, position: null});
+        }
+        setOver(next);
+        // dropping causes this code to be run twice before the isOver could be updated,
+        // so lets set it directly here
+        refs.current.isOver = next;
+      },
       onDragOver: (rect, currentPos) => {
         if (refs.current.onDragOver) {
           const position = getRelPosition(rect, currentPos);
           refs.current.onDragOver({item: useDragStore.getState().item, position});
-          lastSentDragPosRef.current = currentPos;
         }
       },
     });
